@@ -3,8 +3,8 @@ import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity }
 import { useRouter } from 'expo-router';
 import { db } from '../../config/firebaseConfig';
 import { collection, doc, getDoc } from 'firebase/firestore';
-import CertificationCard from '../Shared/CertificationCard';
-import Button from '../Shared/Button';
+import FullWidthCertificationCard from './../Shared/FullWidthCard';
+import Button from './../Shared/Button';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -46,12 +46,7 @@ export default function CourseList({ currentUser, isAdmin }) {
   const hasPrevPage = page > 1;
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity
-      onPress={() => router.push(`/CertificationView/${item.id}`)}
-      style={styles.courseCard}
-    >
-      <CertificationCard cert={item} />
-    </TouchableOpacity>
+    <FullWidthCertificationCard cert={item} />
   );
 
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} />;
@@ -72,6 +67,7 @@ export default function CourseList({ currentUser, isAdmin }) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContainer}
       />
 
       <View style={styles.pagination}>
@@ -93,8 +89,8 @@ export default function CourseList({ currentUser, isAdmin }) {
 const styles = StyleSheet.create({
   container: {
     marginTop: 15,
-    paddingHorizontal: 15,
     flex: 1,
+    paddingHorizontal: 15,
   },
   adminButtons: {
     marginBottom: 20,
@@ -105,8 +101,8 @@ const styles = StyleSheet.create({
     fontSize: 25,
     marginBottom: 12,
   },
-  courseCard: {
-    marginBottom: 15,
+  listContainer: {
+    paddingVertical: 5,
   },
   pagination: {
     flexDirection: 'row',

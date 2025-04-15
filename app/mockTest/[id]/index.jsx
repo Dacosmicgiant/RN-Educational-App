@@ -4,6 +4,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebaseConfig';
 import Colors from '../../../constants/Colors';
+import { Platform } from 'react-native';
 
 export default function TestScreen() {
   const { moduleId, moduleTitle, questionLimit } = useLocalSearchParams();
@@ -153,16 +154,37 @@ export default function TestScreen() {
     let incorrectAnswers = 0;
     let skippedAnswers = 0;
     
-    questions.forEach(question => {
+    // Create detailed question report data
+    const questionReports = questions.map(question => {
       const selectedOptionIndex = selectedAnswers[question.id];
+      const isCorrect = selectedOptionIndex !== undefined && 
+        question.options[selectedOptionIndex]?.isCorrect;
+      const correctOptionIndex = question.options.findIndex(opt => opt.isCorrect);
       
+      // Track statistics
       if (selectedOptionIndex === undefined) {
         skippedAnswers++;
-      } else if (question.options[selectedOptionIndex]?.isCorrect) {
+      } else if (isCorrect) {
         correctAnswers++;
       } else {
         incorrectAnswers++;
       }
+      
+      // Return structured data for each question
+      return {
+        questionId: question.id,
+        questionText: question.text,
+        selectedOptionIndex: selectedOptionIndex,
+        correctOptionIndex: correctOptionIndex,
+        wasCorrect: isCorrect,
+        wasSkipped: selectedOptionIndex === undefined,
+        options: question.options.map(opt => ({
+          text: opt.text,
+          isCorrect: opt.isCorrect
+        })),
+        explanation: question.explanation,
+        difficulty: question.difficulty
+      };
     });
     
     const score = Math.round((correctAnswers / questions.length) * 100);
@@ -170,21 +192,46 @@ export default function TestScreen() {
     // Save test result to database if user is logged in
     if (auth.currentUser) {
       try {
-        await addDoc(collection(db, 'testResults'), {
+        // Prepare full report data
+        const reportData = {
+          // User information
           userId: auth.currentUser.uid,
           userEmail: auth.currentUser.email,
+          
+          // Module information
           moduleId,
           moduleTitle,
+          
+          // Test summary
           questionsCount: questions.length,
           correctAnswers,
           incorrectAnswers,
           skippedAnswers,
           score,
           timeTaken: parseInt(questionLimit) * 60 - timeRemaining,
-          completedAt: serverTimestamp()
-        });
+          completedAt: serverTimestamp(),
+          
+          // User answers mapping (questionId -> selectedOptionIndex)
+          userAnswers: { ...selectedAnswers },
+          
+          // Detailed question reports
+          questionReports: questionReports,
+          
+          // Additional metadata
+          deviceInfo: Platform.OS, // 'ios' or 'android'
+          appVersion: '1.0.0', // You can use a constant or get from your app config
+        };
+        
+        // Add the document to Firestore
+        const reportRef = await addDoc(collection(db, 'testResults'), reportData);
+        console.log("Report saved with ID:", reportRef.id);
+        
       } catch (error) {
-        console.error("Error saving test results:", error);
+        console.error("Error saving test report:", error);
+        Alert.alert(
+          "Error", 
+          "Failed to save your test results. Your score has been calculated but the history may not be available."
+        );
       }
     }
     
@@ -197,7 +244,7 @@ export default function TestScreen() {
     });
     
     setTestFinished(true);
-    setShowCompleteModal(true);
+    setShowCompleteModal(false); // Close the modal if it's open
   };
 
   const returnToModule = () => {

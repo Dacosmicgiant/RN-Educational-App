@@ -20,10 +20,10 @@ export default function TabLayout() {
             tabBarLabel: 'Explore'
         }}
         />
-        <Tabs.Screen name='progress' 
+        <Tabs.Screen name='history' 
         options={{
             tabBarIcon: ({color, size}) => <Ionicons name="bar-chart-outline" size={24} color="black" />,
-            tabBarLabel: 'Progress'
+            tabBarLabel: 'History'
         }}
         />
         <Tabs.Screen name='profile' 
