@@ -7,7 +7,7 @@ export default function Chapters({ chapters }) {
 
   const handleChapterPress = (chapterId) => {
     // Navigate to the specific chapter
-    router.push(`/chapters/${chapterId}`);
+    router.push(`/moduleView`);
   };
 
   return (

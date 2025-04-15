@@ -24,8 +24,8 @@ export default function NoCourse() {
         textAlign: 'center'
       }}>You Don't Have Any Registered Courses</Text>
 
-      <Button text={' + Create New Course '} onPress={()=>router.push('/addCourse')}/>
-      <Button text={' Explore Existing Courses '}  type='outline'/>
+      <Button text={' + Create New Course '} onPress={()=>router.push('/addCertification')}/>
+      <Button text={' Explore Existing Courses '}  type='outline' onPress={()=>router.push('/(tabs)/explore')}/>
     </View>
 
     

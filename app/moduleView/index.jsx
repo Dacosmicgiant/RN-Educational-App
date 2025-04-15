@@ -1,10 +1,10 @@
 import { View, Text } from 'react-native'
 import React from 'react'
 
-export default function module() {
+export default function ModuleView() {
   return (
     <View>
-      <Text>module</Text>
+      <Text>ModuleView</Text>
     </View>
   )
 }

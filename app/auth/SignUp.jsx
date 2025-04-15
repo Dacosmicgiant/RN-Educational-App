@@ -8,49 +8,39 @@ import { db, auth } from '../../config/firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
 import { UserDetailContext } from './../../context/UserDetailContext';
 
-
 export default function SignUp() {
   const router = useRouter();
   const [fullname, setFullName] = useState();
   const [email, setEmail] = useState();
   const [password, setPassword] = useState();
-  const {userDetail, setUserDetail} = useContext(UserDetailContext);
+  const { userDetail, setUserDetail } = useContext(UserDetailContext);
 
-
-  // const CreateNewAccount = async () => {
-  //   try {
-  //     const resp = await createUserWithEmailAndPassword(auth, email, password);
-  //     const user = resp.user;
-  //     console.log(user);
-  //     await SaveUser(user);
-  //   } catch (e) {
-  //     console.log(e.message);
-  //   }
-  // };
-
-  const CreateNewAccount=()=>{
+  const CreateNewAccount = () => {
     createUserWithEmailAndPassword(auth, email, password)
-    .then(async(resp)=>{
-      const user=resp.user;
-      console.log(user);
-      await SaveUser(user);
-    })
-    .catch(e=>{
-      console.log(e.message)
-    })
-  }
+      .then(async (resp) => {
+        const user = resp.user;
+        console.log(user);
+        await SaveUser(user);
+      })
+      .catch((e) => {
+        console.log(e.message);
+      });
+  };
 
   const SaveUser = async (user) => {
     const data = {
-        name: fullname,
-        email: email,
-        member: false,
-        uid: user?.uid,
-      }
-    await setDoc(doc(db, 'users', email), data);
-    setUserDetail(data);
+      name: fullname,
+      email: email.toLowerCase().trim(),
+      isAdmin: false,
+      subscriptionStatus: 'free',
+      testsRemaining: 3,
+      subscriptionExpiry: null,
+      enrolledCertifications: [],
+    };
 
-//     // Navigate to new screen
+    // Save user data using the uid as document ID
+    await setDoc(doc(db, 'users', user.uid), data);  // Using uid as doc ID
+    setUserDetail(data);
   };
 
   return (
@@ -77,14 +67,14 @@ export default function SignUp() {
       }}>Create New Account</Text>
 
       <TextInput placeholder='Full Name' 
-      onChangeText={(value) => setFullName(value)} 
-      style={styles.TextInput} />
+        onChangeText={(value) => setFullName(value)} 
+        style={styles.TextInput} />
       <TextInput placeholder='Email'
-      onChangeText={(value) => setEmail(value)}
-      style={styles.TextInput} />
+        onChangeText={(value) => setEmail(value)}
+        style={styles.TextInput} />
       <TextInput placeholder='Password'
-      onChangeText={(value) => setPassword(value)}
-      secureTextEntry={true} style={styles.TextInput} />
+        onChangeText={(value) => setPassword(value)}
+        secureTextEntry={true} style={styles.TextInput} />
 
       <TouchableOpacity
         onPress={CreateNewAccount}
@@ -103,7 +93,6 @@ export default function SignUp() {
           textAlign: 'center'
         }}
         >Create Account</Text>
-
       </TouchableOpacity>
 
       <View style={{
@@ -124,7 +113,6 @@ export default function SignUp() {
           }}>Sign In</Text>
         </Pressable>
       </View>
-
     </View>
   );
 }
