@@ -3,7 +3,7 @@ import React from 'react'
 import Button from '../Shared/Button';
 import {useRouter} from 'expo-router'
 
-export default function NoCourse() {
+export default function NoCourse({ isAdmin }) {
     const router = useRouter();
   return (
     <View style={{
@@ -24,10 +24,13 @@ export default function NoCourse() {
         textAlign: 'center'
       }}>You Don't Have Any Registered Courses</Text>
 
-      <Button text={' + Create New Course '} onPress={()=>router.push('/addCertification')}/>
+      {isAdmin && (
+        <>
+          <Button text={' + Create New Course '} onPress={()=>router.push('/addCertification')}/>
+          <Button text={' + Add questions to module '} onPress={()=>router.push('/addQuestion')}/>
+        </>
+      )}
       <Button text={' Explore Existing Courses '}  type='outline' onPress={()=>router.push('/(tabs)/explore')}/>
     </View>
-
-    
   )
 }

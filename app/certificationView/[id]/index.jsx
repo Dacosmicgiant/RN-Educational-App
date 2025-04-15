@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
 import { doc, getDoc, updateDoc, arrayUnion, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../config/firebaseConfig';
 import { auth } from '../../../config/firebaseConfig';
 import { UserDetailContext } from '../../../context/UserDetailContext';
+import Colors from '../../../constants/Colors';
 
 export default function CertificationDetail() {
   const { id } = useLocalSearchParams();
   const [cert, setCert] = useState(null);
+  const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const { userDetail, refreshUser } = useContext(UserDetailContext);
   const [enrolling, setEnrolling] = useState(false);
@@ -16,28 +18,41 @@ export default function CertificationDetail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const docRef = doc(db, 'certifications', id);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          setCert(snap.data());
+        // Fetch certification data
+        const certRef = doc(db, 'certifications', id);
+        const certSnap = await getDoc(certRef);
+        
+        if (certSnap.exists()) {
+          setCert(certSnap.data());
+          
+          // Fetch modules for this certification
+          const modulesQuery = query(
+            collection(db, 'modules'), 
+            where('certificationId', '==', id)
+          );
+          
+          const modulesSnap = await getDocs(modulesQuery);
+          const modulesData = modulesSnap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          setModules(modulesData);
         }
       } catch (error) {
-        console.error("Error fetching certification:", error);
+        console.error("Error fetching certification data:", error);
         Alert.alert("Error", "Failed to load certification details");
       } finally {
         setLoading(false);
       }
     };
+    
     fetchData();
   }, [id]);
 
   const handleEnroll = async () => {
     if (enrolling) return;
     setEnrolling(true);
-    
-    console.log("Current auth user:", auth.currentUser?.email);
-    console.log("Current user detail:", userDetail);
-    console.log("refreshUser function:", typeof refreshUser);
     
     if (!auth.currentUser) {
       Alert.alert("Authentication Required", "Please sign in first.");
@@ -58,7 +73,6 @@ export default function CertificationDetail() {
       if (!querySnapshot.empty) {
         // Use the first matching document
         userDocId = querySnapshot.docs[0].id;
-        console.log("Found user document:", userDocId);
         
         // Check if already enrolled
         const userData = querySnapshot.docs[0].data();
@@ -80,20 +94,8 @@ export default function CertificationDetail() {
       });
       
       // Refresh user context
-      try {
-        if (typeof refreshUser === 'function') {
-          await refreshUser();
-        } else {
-          console.warn("refreshUser is not a function", refreshUser);
-          // Fallback: manually update userDetail
-          const updatedUserDoc = await getDoc(userRef);
-          if (updatedUserDoc.exists()) {
-            // This won't update the context, but at least we have fresh data
-            console.log("Updated user data:", updatedUserDoc.data());
-          }
-        }
-      } catch (refreshError) {
-        console.error("Error refreshing user data:", refreshError);
+      if (typeof refreshUser === 'function') {
+        await refreshUser();
       }
       
       Alert.alert("Success", "You are now enrolled in this certification!");
@@ -105,16 +107,36 @@ export default function CertificationDetail() {
     }
   };
 
-  if (loading) return <View style={styles.loadingContainer}><Text style={styles.loadingText}>Loading...</Text></View>;
+  const navigateToModule = (moduleId, moduleTitle) => {
+    router.push({
+      pathname: `/moduleView/${moduleId}`,
+      params: { title: moduleTitle }
+    });
+  };
 
-  if (!cert) return <View style={styles.errorContainer}><Text style={styles.errorText}>Certification not found</Text></View>;
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.PRIMARY || '#0066FF'} />
+        <Text style={styles.loadingText}>Loading certification details...</Text>
+      </View>
+    );
+  }
+
+  if (!cert) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Certification not found</Text>
+      </View>
+    );
+  }
 
   const isEnrolled = userDetail?.enrolledCertifications?.includes(id);
 
   return (
     <ScrollView style={styles.container}>
       <Image 
-        source={{ uri: cert.image }} 
+        source={{ uri: cert.image || 'https://via.placeholder.com/800x400?text=No+Image' }} 
         style={styles.courseImage} 
         resizeMode="cover" 
       />
@@ -124,7 +146,7 @@ export default function CertificationDetail() {
 
         <View style={styles.chaptersInfo}>
           <Text style={styles.chaptersText}>
-            {cert.modules?.length || 0} Chapters
+            {modules.length} Chapters
           </Text>
         </View>
 
@@ -148,15 +170,23 @@ export default function CertificationDetail() {
 
       <View style={styles.chapterList}>
         <Text style={styles.sectionTitle}>Chapters</Text>
-        {cert.modules?.map((mod, index) => (
-          <View key={index} style={styles.chapterItem}>
-            <View style={styles.chapterContent}>
-              <Text style={styles.chapterNumber}>{index + 1}. </Text>
-              <Text style={styles.chapterTitle}>{mod}</Text>
-            </View>
-            <Text style={styles.arrowIcon}>▶</Text>
-          </View>
-        ))}
+        {modules.length > 0 ? (
+          modules.map((module, index) => (
+            <TouchableOpacity 
+              key={module.id} 
+              style={styles.chapterItem}
+              onPress={() => navigateToModule(module.id, module.title)}
+            >
+              <View style={styles.chapterContent}>
+                <Text style={styles.chapterNumber}>{index + 1}. </Text>
+                <Text style={styles.chapterTitle}>{module.title}</Text>
+              </View>
+              <Text style={styles.arrowIcon}>▶</Text>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <Text style={styles.noModulesText}>No chapters available for this certification yet.</Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -165,6 +195,7 @@ export default function CertificationDetail() {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -175,6 +206,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontFamily: 'winky',
     fontSize: 16,
+    marginTop: 10,
   },
   errorContainer: {
     flex: 1,
@@ -279,4 +311,11 @@ const styles = StyleSheet.create({
     color: '#0066FF',
     fontSize: 16,
   },
+  noModulesText: {
+    fontFamily: 'winky',
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    paddingVertical: 20,
+  }
 });

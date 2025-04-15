@@ -4,10 +4,11 @@ import { useRouter } from 'expo-router';
 import { db } from '../../config/firebaseConfig';
 import { collection, doc, getDoc } from 'firebase/firestore';
 import CertificationCard from '../Shared/CertificationCard';
+import Button from '../Shared/Button';
 
 const ITEMS_PER_PAGE = 5;
 
-export default function CourseList({ currentUser }) {
+export default function CourseList({ currentUser, isAdmin }) {
   const router = useRouter();
   const [certifications, setCertifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +58,13 @@ export default function CourseList({ currentUser }) {
 
   return (
     <View style={styles.container}>
+      {isAdmin && (
+        <View style={styles.adminButtons}>
+          <Button text={' + Create New Course '} onPress={() => router.push('/addCertification')} />
+          <Button text={' + Add questions to module '} onPress={() => router.push('/addQuestion')} />
+        </View>
+      )}
+
       <Text style={styles.sectionTitle}>Your Courses</Text>
       
       <FlatList
@@ -87,6 +95,10 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingHorizontal: 15,
     flex: 1,
+  },
+  adminButtons: {
+    marginBottom: 20,
+    alignItems: 'center',
   },
   sectionTitle: {
     fontFamily: 'winky-bold',

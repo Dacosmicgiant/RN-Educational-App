@@ -13,6 +13,7 @@ export default function Home() {
   const router = useRouter();
   const [currentUserData, setCurrentUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -57,6 +58,10 @@ export default function Home() {
           const userData = snap.data();
           console.log("User enrollments:", userData.enrolledCertifications);
           setCurrentUserData(userData);
+          
+          // Check if the user is an admin using isAdmin field
+          setIsAdmin(userData.isAdmin === true);
+          console.log("User is admin:", userData.isAdmin);
         } else {
           console.log("No user data found");
         }
@@ -84,9 +89,9 @@ export default function Home() {
     }}>
       <Header onSettingsPress={handleLogout} />
       {hasCourses ? (
-        <CourseList currentUser={currentUserData} />
+        <CourseList currentUser={currentUserData} isAdmin={isAdmin} />
       ) : (
-        <NoCourse />
+        <NoCourse isAdmin={isAdmin} />
       )}
     </View>
   );
