@@ -3,6 +3,9 @@ import React from 'react'
 import Header from '../../components/Home/Header'
 import Colors from './../../constants/Colors'
 import NoCourse from '../../components/Home/NoCourse'
+import CourseList from '../../components/Home/CourseList'
+import ProgressSection from '../../components/Home/CourseProgress'
+import PracticeSection from '../../components/Home/PractiseSection'
 
 export default function Home() {
   return (
@@ -13,9 +16,9 @@ export default function Home() {
       backgroundColor: Colors.WHITE
     }}>
       <Header />
-      <NoCourse />
-
-      
+      {/* <NoCourse /> */}
+      <CourseList />
+      <ProgressSection />
     </View>
   )
 }
