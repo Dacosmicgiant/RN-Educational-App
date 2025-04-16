@@ -1,13 +1,12 @@
-import { View, Text, Platform, Alert, ActivityIndicator } from 'react-native';
 import React, { useEffect, useState } from 'react';
-import Header from '../../components/Home/Header';
-import Colors from './../../constants/Colors';
+import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
+import { auth, db } from '../../config/firebaseConfig';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import Colors from '../../constants/Colors';
 import NoCourse from '../../components/Home/NoCourse';
 import CourseList from '../../components/Home/CourseList';
-import { signOut } from 'firebase/auth';
-import { auth, db } from '../../config/firebaseConfig';
-import { useRouter } from 'expo-router';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function Home() {
   const router = useRouter();
@@ -33,37 +32,23 @@ export default function Home() {
           return;
         }
 
-        console.log("Fetching data for user:", user.email);
-        
-        // First try with email as document ID
         const docRef = doc(db, 'users', user.email);
         let snap = await getDoc(docRef);
-        
-        // If not found, query by email field
+
         if (!snap.exists()) {
-          console.log("Document not found by ID, searching by email field...");
           const usersRef = collection(db, 'users');
           const q = query(usersRef, where('email', '==', user.email));
           const querySnap = await getDocs(q);
-          
+
           if (!querySnap.empty) {
             snap = querySnap.docs[0];
-            console.log("Found user document by query:", snap.id);
-          } else {
-            console.log("No user document found");
           }
         }
 
         if (snap.exists()) {
           const userData = snap.data();
-          console.log("User enrollments:", userData.enrolledCertifications);
           setCurrentUserData(userData);
-          
-          // Check if the user is an admin using isAdmin field
           setIsAdmin(userData.isAdmin === true);
-          console.log("User is admin:", userData.isAdmin);
-        } else {
-          console.log("No user data found");
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -75,24 +60,66 @@ export default function Home() {
     fetchUserData();
   }, []);
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 50 }} />;
-  
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.PRIMARY} />
+      </View>
+    );
+  }
+
   const hasCourses = currentUserData?.enrolledCertifications?.length > 0;
-  console.log("Has courses:", hasCourses, currentUserData?.enrolledCertifications);
-  
+
   return (
-    <View style={{
-      padding: 25,
-      paddingTop: Platform.OS === 'ios' ? 45 : 25,
-      flex: 1,
-      backgroundColor: Colors.WHITE
-    }}>
-      <Header onSettingsPress={handleLogout} />
-      {hasCourses ? (
-        <CourseList currentUser={currentUserData} isAdmin={isAdmin} />
-      ) : (
-        <NoCourse isAdmin={isAdmin} />
-      )}
+    <View style={styles.container}>
+      {/* Header Section */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          Hello, {currentUserData?.name || 'User'}
+        </Text>
+      </View>
+
+      {/* Courses Section */}
+      <View style={styles.coursesSection}>
+        <Text style={styles.sectionTitle}>Your Courses</Text>
+        {hasCourses ? (
+          <CourseList currentUser={currentUserData} isAdmin={isAdmin} />
+        ) : (
+          <NoCourse isAdmin={isAdmin} />
+        )}
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.WHITE,
+    padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontFamily: 'winky-bold',
+    fontSize: 28,
+    color: Colors.BLACK,
+  },
+  coursesSection: {
+    flex: 1,
+    marginTop: 10,
+  },
+  sectionTitle: {
+    fontFamily: 'winky-bold',
+    fontSize: 20,
+    color: Colors.BLACK,
+    marginBottom: 15,
+  },
+});
