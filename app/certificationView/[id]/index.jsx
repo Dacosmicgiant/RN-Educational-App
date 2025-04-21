@@ -7,6 +7,7 @@ import { auth } from '../../../config/firebaseConfig';
 import { UserDetailContext } from '../../../context/UserDetailContext';
 import Colors from '../../../constants/Colors';
 
+import Button from '../../../components/Shared/Button';
 export default function CertificationDetail() {
   const { id } = useLocalSearchParams();
   const [cert, setCert] = useState(null);
@@ -14,6 +15,7 @@ export default function CertificationDetail() {
   const [loading, setLoading] = useState(true);
   const { userDetail, refreshUser } = useContext(UserDetailContext);
   const [enrolling, setEnrolling] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -32,10 +34,18 @@ export default function CertificationDetail() {
           );
           
           const modulesSnap = await getDocs(modulesQuery);
-          const modulesData = modulesSnap.docs.map(doc => ({
+          let modulesData = modulesSnap.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
+          
+          // Sort modules by moduleNumber field in ascending order
+          modulesData = modulesData.sort((a, b) => {
+            // Handle cases where moduleNumber might be missing
+            const aNum = a.moduleNumber !== undefined ? a.moduleNumber : Infinity;
+            const bNum = b.moduleNumber !== undefined ? b.moduleNumber : Infinity;
+            return aNum - bNum;
+          });
           
           setModules(modulesData);
         }
@@ -48,6 +58,23 @@ export default function CertificationDetail() {
     };
     
     fetchData();
+
+    // Check if user is admin
+    const checkAdminStatus = async () => {
+      if (auth.currentUser) {
+        const userEmail = auth.currentUser.email;
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', userEmail));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const userData = querySnapshot.docs[0].data();
+          setIsAdmin(userData.isAdmin === true);
+        }
+      }
+    };
+    
+    checkAdminStatus();
   }, [id]);
 
   const handleEnroll = async () => {
@@ -114,6 +141,14 @@ export default function CertificationDetail() {
     });
   };
 
+  // Function to navigate to the edit certification page
+  const navigateToEditCertification = () => {
+    router.push({
+      pathname: `/editCertification/${id}`,
+      params: { certificationId: id }
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -143,6 +178,19 @@ export default function CertificationDetail() {
 
       <View style={styles.infoContainer}>
         <Text style={styles.courseTitle}>{cert.title}</Text>
+        
+        {/* Admin buttons section - moved outside of enrollment button */}
+        {isAdmin && (
+          <View style={styles.adminActions}>
+            
+            <Button
+              text="/ Edit Course"
+              onPress={navigateToEditCertification}
+              style={styles.actionButton}
+            />
+            
+          </View>
+        )}
 
         <View style={styles.chaptersInfo}>
           <Text style={styles.chaptersText}>
@@ -178,7 +226,9 @@ export default function CertificationDetail() {
               onPress={() => navigateToModule(module.id, module.title)}
             >
               <View style={styles.chapterContent}>
-                <Text style={styles.chapterNumber}>{index + 1}. </Text>
+                <Text style={styles.chapterNumber}>
+                  {module.moduleNumber !== undefined ? `${module.moduleNumber}.` : `${index + 1}.`} 
+                </Text>
                 <Text style={styles.chapterTitle}>{module.title}</Text>
               </View>
               <Text style={styles.arrowIcon}>▶</Text>
@@ -233,6 +283,27 @@ const styles = StyleSheet.create({
     fontFamily: 'winky-bold',
     fontSize: 24,
     marginBottom: 5,
+  },
+  adminActions: {
+    marginVertical: 15,
+    gap: 10,
+  },
+  actionButton: {
+    marginBottom: 5,
+    backgroundColor: Colors.PRIMARY || '#0066FF',
+  },
+  button: {
+    backgroundColor: '#0066FF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontFamily: 'winky',
+    fontSize: 14,
+    fontWeight: '500',
   },
   chaptersInfo: {
     flexDirection: 'row',
