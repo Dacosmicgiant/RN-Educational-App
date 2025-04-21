@@ -1,28 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { auth, db } from '../../config/firebaseConfig';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import Colors from '../../constants/Colors';
-import FullWidthCertificationCard from './../../components/Shared/FullWidthCard';
 import Button from './../../components/Shared/Button';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native';
 
 export default function Profile() {
   const router = useRouter();
   const [currentUserData, setCurrentUserData] = useState(null);
-  const [certifications, setCertifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      router.replace('/auth/SignIn');
-    } catch (error) {
-      Alert.alert("Logout Failed", error.message);
-    }
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          onPress: async () => {
+            try {
+              await signOut(auth);
+              router.replace('/auth/SignIn');
+            } catch (error) {
+              Alert.alert("Logout Failed", error.message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   useEffect(() => {
@@ -34,7 +45,6 @@ export default function Profile() {
           return;
         }
 
-        // Fetch user data
         const docRef = doc(db, 'users', user.email);
         let snap = await getDoc(docRef);
 
@@ -51,16 +61,6 @@ export default function Profile() {
           const userData = snap.data();
           setCurrentUserData(userData);
           setIsAdmin(userData.isAdmin === true);
-
-          // Fetch enrolled certifications
-          const enrolledIds = userData?.enrolledCertifications || [];
-          const certPromises = enrolledIds.map(id => getDoc(doc(db, 'certifications', id)));
-          const certSnapshots = await Promise.all(certPromises);
-
-          const certs = certSnapshots
-            .filter(doc => doc.exists())
-            .map(doc => ({ id: doc.id, ...doc.data() }));
-          setCertifications(certs);
         }
       } catch (error) {
         console.error("Error fetching profile data:", error);
@@ -76,191 +76,187 @@ export default function Profile() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.PRIMARY} />
+        <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-    >
-      {/* Header Section */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Profile</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Ionicons name="log-out-outline" size={24} color={Colors.PRIMARY} />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Section */}
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={24} color={Colors.PRIMARY} />
+          </TouchableOpacity>
+        </View>
 
-      {/* User Info Section */}
-      <View style={styles.userInfo}>
-        <Image
-          source={{ uri: currentUserData?.photoURL || 'https://via.placeholder.com/150' }}
-          style={styles.avatar}
-        />
-        <Text style={styles.userName}>
-          {currentUserData?.name || 'User Name'}
-        </Text>
-        <Text style={styles.userEmail}>
-          {currentUserData?.email || 'user@example.com'}
-        </Text>
+        {/* User Info Section */}
+        <View style={styles.userInfoCard}>
+          <View style={styles.userTextInfo}>
+            <Text style={styles.userName}>
+              {currentUserData?.name || 'User Name'}
+            </Text>
+            <Text style={styles.userEmail}>
+              {currentUserData?.email || 'user@example.com'}
+            </Text>
+            {isAdmin && (
+              <View style={styles.adminBadge}>
+                <Text style={styles.adminText}>Admin</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Admin Actions */}
         {isAdmin && (
-          <View style={styles.adminBadge}>
-            <Text style={styles.adminText}>Admin</Text>
+          <View style={styles.adminSection}>
+            <Text style={styles.sectionTitle}>Admin Actions</Text>
+            <View style={styles.adminActions}>
+              <Button
+                text="Create New Course"
+                onPress={() => router.push('/addCertification')}
+                style={styles.adminButton}
+                icon={<Ionicons name="add-circle" size={20} color="#FFF" />}
+              />
+              <Button
+                text="Add Questions to Module"
+                onPress={() => router.push('/addQuestion')}
+                style={styles.adminButton}
+                icon={<Ionicons name="help-circle" size={20} color="#FFF" />}
+              />
+            </View>
           </View>
         )}
-      </View>
-
-      {/* Stats Section */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{certifications.length}</Text>
-          <Text style={styles.statLabel}>Courses Enrolled</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {currentUserData?.completedCourses || 0}
-          </Text>
-          <Text style={styles.statLabel}>Courses Completed</Text>
-        </View>
-      </View>
-
-      {/* Admin Actions */}
-      {isAdmin && (
-        <View style={styles.adminActions}>
-          <Button
-            text="+ Create New Course"
-            onPress={() => router.push('/addCertification')}
-            style={styles.actionButton}
-          />
-          <Button
-            text="+ Add Questions to Module"
-            onPress={() => router.push('/addQuestion')}
-            style={styles.actionButton}
-          />
-        </View>
-      )}
-
-      {/* Enrolled Courses */}
-      <View style={styles.coursesSection}>
-        <Text style={styles.sectionTitle}>Enrolled Courses</Text>
-        {certifications.length > 0 ? (
-          certifications.map((cert) => (
-            <FullWidthCertificationCard key={cert.id} cert={cert} />
-          ))
-        ) : (
-          <Text style={styles.noCoursesText}>No courses enrolled yet.</Text>
-        )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFF',
+  },
   container: {
     flex: 1,
-    backgroundColor: Colors.WHITE,
+    backgroundColor: '#FFF',
   },
   contentContainer: {
-    padding: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: 30,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FFF',
+  },
+  loadingText: {
+    fontFamily: 'winky',
+    fontSize: 16,
+    color: '#333',
+    marginTop: 12,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#FFF',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontFamily: 'winky-bold',
-    fontSize: 28,
-    color: Colors.BLACK,
+    fontSize: 20,
+    color: '#333',
   },
   logoutButton: {
-    padding: 10,
-  },
-  userInfo: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
   },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: Colors.PRIMARY,
+  userInfoCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    margin: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  userTextInfo: {
+    alignItems: 'center',
   },
   userName: {
     fontFamily: 'winky-bold',
-    fontSize: 22,
-    color: Colors.BLACK,
+    fontSize: 24,
+    color: '#1F2A44',
+    marginBottom: 8,
   },
   userEmail: {
-    fontFamily: 'winky-regular',
+    fontFamily: 'winky',
     fontSize: 16,
-    color: Colors.GRAY,
-    marginTop: 5,
+    color: '#4B5563',
+    marginBottom: 12,
   },
   adminBadge: {
-    backgroundColor: Colors.PRIMARY,
+    backgroundColor: '#10B981',
     borderRadius: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    marginTop: 10,
+    alignSelf: 'center',
   },
   adminText: {
-    color: Colors.WHITE,
+    color: '#FFF',
     fontFamily: 'winky-bold',
     fontSize: 14,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#F5F7FA',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 20,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontFamily: 'winky-bold',
-    fontSize: 20,
-    color: Colors.PRIMARY,
-  },
-  statLabel: {
-    fontFamily: 'winky-regular',
-    fontSize: 14,
-    color: Colors.GRAY,
-  },
-  adminActions: {
-    marginBottom: 20,
-  },
-  actionButton: {
-    marginVertical: 5,
-  },
-  coursesSection: {
-    marginTop: 10,
+  adminSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   sectionTitle: {
     fontFamily: 'winky-bold',
-    fontSize: 20,
-    color: Colors.BLACK,
-    marginBottom: 15,
-  },
-  noCoursesText: {
-    fontFamily: 'winky-regular',
-    fontSize: 16,
-    color: Colors.GRAY,
+    fontSize: 18,
+    color: '#1F2A44',
+    marginBottom: 16,
     textAlign: 'center',
-    marginTop: 20,
+  },
+  adminActions: {
+    gap: 12,
+  },
+  adminButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
 });

@@ -1,24 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebaseConfig';
 import Colors from '../../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-
-
-
-
-
 
 export default function HistoryDetailScreen() {
   const { id } = useLocalSearchParams();
   const [testResult, setTestResult] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isFirstView, setIsFirstView] = useState(true);
+  const [deleteInProgress, setDeleteInProgress] = useState(false);
 
   useEffect(() => {
     fetchTestResult();
+    
+    // Set up cleanup function to delete report when component unmounts
+    return () => {
+      if (testResult && isFirstView && !deleteInProgress) {
+        deleteTestResult();
+      }
+    };
   }, [id]);
 
   const fetchTestResult = async () => {
@@ -37,23 +41,33 @@ export default function HistoryDetailScreen() {
           ...docSnap.data(),
           completedAt: docSnap.data().completedAt?.toDate() || new Date()
         };
+        
+        // Check if this result has been viewed before
+        if (resultData.hasBeenViewed) {
+          setIsFirstView(false);
+        } else {
+          // Mark as viewed in Firestore
+          await updateDoc(docRef, {
+            hasBeenViewed: true,
+            lastViewedAt: new Date()
+          });
+        }
   
         setTestResult(resultData);
   
-        // Check for question data in three possible formats:
-        
-        // 1. If we have detailed questionReports 
+        // Prioritize the questionReports array that contains full question details
         if (resultData.questionReports && resultData.questionReports.length > 0) {
-          // Use the enhanced question report data
+          console.log("Using questionReports from test result");
           setQuestions(resultData.questionReports);
         } 
-        // 2. If full questions were stored in the result
+        // Fall back to full questions if stored directly
         else if (resultData.questions && resultData.questions.length > 0) {
+          console.log("Using questions array from test result");
           setQuestions(resultData.questions);
         } 
-        // 3. If only question IDs were stored, fetch them from the database
+        // Last resort: fetch questions by IDs
         else if (resultData.questionIds && resultData.questionIds.length > 0) {
-          // Fetch questions if only IDs are stored
+          console.log("Fetching questions by IDs");
           const questionPromises = resultData.questionIds.map(qId => 
             getDoc(doc(db, 'questions', qId))
           );
@@ -65,6 +79,8 @@ export default function HistoryDetailScreen() {
           }));
           
           setQuestions(questionData);
+        } else {
+          console.log("No questions found in test result");
         }
       }
     } catch (error) {
@@ -72,6 +88,42 @@ export default function HistoryDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const deleteTestResult = async () => {
+    if (!id || !auth.currentUser || !isFirstView) {
+      return;
+    }
+    
+    try {
+      setDeleteInProgress(true);
+      const docRef = doc(db, 'testResults', id);
+      await deleteDoc(docRef);
+      console.log("Test result deleted successfully:", id);
+    } catch (error) {
+      console.error("Error deleting test result:", error);
+    }
+  };
+
+  const handleCloseReport = () => {
+    Alert.alert(
+      "One-Time Viewing",
+      "This test report will be deleted after you close it. Are you sure you want to leave?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Yes, Close Report",
+          style: "destructive",
+          onPress: () => {
+            deleteTestResult();
+            router.back();
+          }
+        }
+      ]
+    );
   };
 
   const formatDate = (date) => {
@@ -114,130 +166,198 @@ export default function HistoryDetailScreen() {
     );
   }
 
+  if (!isFirstView) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="eye-off-outline" size={64} color="#CCC" />
+        <Text style={styles.errorTitle}>Report Already Viewed</Text>
+        <Text style={styles.errorText}>
+          This test report has already been viewed and is no longer available. Test reports can only be viewed once for security reasons.
+        </Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
-    
-    <ScrollView style={styles.container}>
-        
+    <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleCloseReport}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Test Results</Text>
+        <View style={styles.oneTimeViewBadge}>
+          <Ionicons name="eye-outline" size={14} color="#FFFFFF" />
+          <Text style={styles.oneTimeViewText}>One-time view</Text>
+        </View>
       </View>
       
-      <View style={styles.resultHeader}>
-        <Text style={styles.moduleTitle}>{testResult.moduleTitle}</Text>
-        <Text style={styles.dateText}>{formatDate(testResult.completedAt)}</Text>
-      </View>
-      
-      <View style={styles.resultContainer}>
-        <View style={styles.scoreContainer}>
-          <Text style={styles.scoreLabel}>Score</Text>
-          <Text style={[
-            styles.scoreValue,
-            testResult.score >= 80 ? styles.highScore : 
-            testResult.score >= 60 ? styles.mediumScore : styles.lowScore
-          ]}>
-            {testResult.score}%
+      <ScrollView>
+        <View style={styles.warningBanner}>
+          <Ionicons name="warning-outline" size={20} color="#FFF" style={styles.warningIcon} />
+          <Text style={styles.warningText}>
+            This report will be deleted once you exit this screen
           </Text>
         </View>
         
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{testResult.correctAnswers}</Text>
-            <Text style={styles.statLabel}>Correct</Text>
+        <View style={styles.resultHeader}>
+          <Text style={styles.moduleTitle}>{testResult.moduleTitle}</Text>
+          <Text style={styles.dateText}>{formatDate(testResult.completedAt)}</Text>
+        </View>
+        
+        <View style={styles.resultContainer}>
+          <View style={styles.scoreContainer}>
+            <Text style={styles.scoreLabel}>Score</Text>
+            <Text style={[
+              styles.scoreValue,
+              testResult.score >= 80 ? styles.highScore : 
+              testResult.score >= 60 ? styles.mediumScore : styles.lowScore
+            ]}>
+              {testResult.score}%
+            </Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{testResult.incorrectAnswers}</Text>
-            <Text style={styles.statLabel}>Incorrect</Text>
+          
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{testResult.correctAnswers}</Text>
+              <Text style={styles.statLabel}>Correct</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{testResult.incorrectAnswers}</Text>
+              <Text style={styles.statLabel}>Incorrect</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{testResult.skippedAnswers}</Text>
+              <Text style={styles.statLabel}>Skipped</Text>
+            </View>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{testResult.skippedAnswers}</Text>
-            <Text style={styles.statLabel}>Skipped</Text>
+          
+          <View style={styles.additionalInfo}>
+            <View style={styles.infoItem}>
+              <Ionicons name="time-outline" size={18} color="#666" />
+              <Text style={styles.infoText}>Time Taken: {formatDuration(testResult.timeTaken)}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Ionicons name="help-circle-outline" size={18} color="#666" />
+              <Text style={styles.infoText}>Questions: {testResult.questionsCount}</Text>
+            </View>
           </View>
         </View>
         
-        <View style={styles.additionalInfo}>
-          <View style={styles.infoItem}>
-            <Ionicons name="time-outline" size={18} color="#666" />
-            <Text style={styles.infoText}>Time Taken: {formatDuration(testResult.timeTaken)}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="help-circle-outline" size={18} color="#666" />
-            <Text style={styles.infoText}>Questions: {testResult.questionsCount}</Text>
-          </View>
-        </View>
-      </View>
-      
-      {questions.length > 0 && (
-        <View style={styles.reviewContainer}>
-          <Text style={styles.reviewTitle}>Question Review</Text>
-          
-          {questions.map((question, index) => {
-            const userAnswer = testResult.userAnswers?.[question.id];
-            const correctOptionIndex = question.options.findIndex(option => option.isCorrect);
-            const isCorrect = userAnswer !== undefined && 
-              question.options[userAnswer]?.isCorrect;
+        {questions.length > 0 && (
+          <View style={styles.reviewContainer}>
+            <Text style={styles.reviewTitle}>Question Review</Text>
             
-            return (
-              <View key={question.id} style={styles.reviewQuestion}>
-                <Text style={styles.reviewQuestionNumber}>Question {index + 1}</Text>
-                <Text style={styles.reviewQuestionText}>{question.text}</Text>
+            {questions.map((question, index) => {
+              // Handle both questionReports format and regular questions format
+              let questionText, options, explanation, selectedOptionIndex, isCorrect, wasSkipped;
+              
+              // If using questionReports format
+              if (question.questionText) {
+                questionText = question.questionText;
+                options = question.options;
+                explanation = question.explanation;
+                selectedOptionIndex = question.selectedOptionIndex;
+                isCorrect = question.wasCorrect;
+                wasSkipped = question.wasSkipped;
+              } 
+              // If using traditional questions format with userAnswers
+              else {
+                questionText = question.text;
+                options = question.options;
+                explanation = question.explanation;
                 
-                <View style={styles.reviewOptionsContainer}>
-                {question.options.map((option, optIndex) => (
-                <View 
-                    key={`${question.id}-${optIndex}`} 
-                    style={[
-                    styles.reviewOption,
-                    userAnswer === optIndex && styles.selectedOption,
-                    option.isCorrect && styles.correctOption
-                    ]}
-                >
-                    <Text style={[
-                    styles.reviewOptionText,
-                    (option.isCorrect || userAnswer === optIndex) && styles.reviewOptionHighlightedText
-                    ]}>
-                    {String.fromCharCode(65 + optIndex)}. {option.text}
-                    </Text>
-                </View>
-                ))}
-
-                </View>
+                const userAnswer = testResult.userAnswers?.[question.id];
+                selectedOptionIndex = userAnswer?.selectedOptionIndex;
                 
-                {userAnswer === undefined ? (
-                  <View style={styles.reviewResult}>
-                    <Text style={styles.skippedText}>Skipped</Text>
-                    <Text style={styles.correctAnswerText}>
-                      Correct answer: {String.fromCharCode(65 + correctOptionIndex)}
-                    </Text>
+                // Determine if the answer was correct
+                const correctOptionIndex = options.findIndex(option => option.isCorrect);
+                isCorrect = selectedOptionIndex !== undefined && selectedOptionIndex === correctOptionIndex;
+                wasSkipped = selectedOptionIndex === undefined;
+              }
+              
+              // Find the correct option index (works for both formats)
+              const correctOptionIndex = options.findIndex(option => option.isCorrect);
+              
+              return (
+                <View key={question.id || index} style={styles.reviewQuestion}>
+                  <Text style={styles.reviewQuestionNumber}>Question {index + 1}</Text>
+                  <Text style={styles.reviewQuestionText}>{questionText}</Text>
+                  
+                  <View style={styles.reviewOptionsContainer}>
+                    {options.map((option, optIndex) => (
+                      <View 
+                        key={`${question.id || index}-${optIndex}`} 
+                        style={[
+                          styles.reviewOption,
+                          selectedOptionIndex === optIndex && styles.selectedOption,
+                          option.isCorrect && styles.correctOption
+                        ]}
+                      >
+                        <Text style={[
+                          styles.reviewOptionText,
+                          (option.isCorrect || selectedOptionIndex === optIndex) && styles.reviewOptionHighlightedText
+                        ]}>
+                          {String.fromCharCode(65 + optIndex)}. {option.text}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
-                ) : (
-                  <View style={styles.reviewResult}>
-                    <Text style={isCorrect ? styles.correctText : styles.incorrectText}>
-                      {isCorrect ? 'Correct' : 'Incorrect'}
-                    </Text>
-                    {!isCorrect && (
+                  
+                  {wasSkipped ? (
+                    <View style={styles.reviewResult}>
+                      <Text style={styles.skippedText}>Skipped</Text>
                       <Text style={styles.correctAnswerText}>
                         Correct answer: {String.fromCharCode(65 + correctOptionIndex)}
                       </Text>
-                    )}
-                  </View>
-                )}
-                
-                {question.explanation && (
-                  <View style={styles.explanationContainer}>
-                    <Text style={styles.explanationLabel}>Explanation:</Text>
-                    <Text style={styles.explanationText}>{question.explanation}</Text>
-                  </View>
-                )}
-              </View>
-            );
-          })}
+                    </View>
+                  ) : (
+                    <View style={styles.reviewResult}>
+                      <Text style={isCorrect ? styles.correctText : styles.incorrectText}>
+                        {isCorrect ? 'Correct' : 'Incorrect'}
+                      </Text>
+                      {!isCorrect && (
+                        <Text style={styles.correctAnswerText}>
+                          Correct answer: {String.fromCharCode(65 + correctOptionIndex)}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  
+                  {explanation && (
+                    <View style={styles.explanationContainer}>
+                      <Text style={styles.explanationLabel}>Explanation:</Text>
+                      <Text style={styles.explanationText}>{explanation}</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+        
+        <View style={styles.footerContainer}>
+          <TouchableOpacity 
+            style={styles.saveButton} 
+            onPress={() => Alert.alert(
+              "Cannot Save Report",
+              "This report is viewable only once and cannot be saved due to security policy.",
+              [{ text: "OK" }]
+            )}
+          >
+            <Ionicons name="document-text-outline" size={20} color="#FFF" />
+            <Text style={styles.saveButtonText}>Save Report (Disabled)</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.closeButton} onPress={handleCloseReport}>
+            <Ionicons name="close-circle-outline" size={20} color="#FFF" />
+            <Text style={styles.closeButtonText}>Close & Delete Report</Text>
+          </TouchableOpacity>
         </View>
-      )}
-    </ScrollView>
-    
+      </ScrollView>
+    </View>
   );
 }
 
@@ -304,6 +424,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+    flex: 1,
+  },
+  oneTimeViewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  oneTimeViewText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  warningBanner: {
+    backgroundColor: '#FF9500',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+  },
+  warningIcon: {
+    marginRight: 8,
+  },
+  warningText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   resultHeader: {
     padding: 20,
@@ -490,5 +640,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     lineHeight: 22,
+  },
+  footerContainer: {
+    margin: 16,
+    marginTop: 0,
+    marginBottom: 40,
+  },
+  saveButton: {
+    backgroundColor: '#8E8E93',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  closeButton: {
+    backgroundColor: '#FF3B30',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 8,
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });

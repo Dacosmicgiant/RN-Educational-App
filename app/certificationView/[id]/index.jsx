@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { doc, getDoc, updateDoc, arrayUnion, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../config/firebaseConfig';
 import { auth } from '../../../config/firebaseConfig';
 import { UserDetailContext } from '../../../context/UserDetailContext';
 import Colors from '../../../constants/Colors';
-
 import Button from '../../../components/Shared/Button';
+
 export default function CertificationDetail() {
   const { id } = useLocalSearchParams();
   const [cert, setCert] = useState(null);
@@ -20,14 +20,12 @@ export default function CertificationDetail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch certification data
         const certRef = doc(db, 'certifications', id);
         const certSnap = await getDoc(certRef);
         
         if (certSnap.exists()) {
           setCert(certSnap.data());
           
-          // Fetch modules for this certification
           const modulesQuery = query(
             collection(db, 'modules'), 
             where('certificationId', '==', id)
@@ -39,9 +37,7 @@ export default function CertificationDetail() {
             ...doc.data()
           }));
           
-          // Sort modules by moduleNumber field in ascending order
           modulesData = modulesData.sort((a, b) => {
-            // Handle cases where moduleNumber might be missing
             const aNum = a.moduleNumber !== undefined ? a.moduleNumber : Infinity;
             const bNum = b.moduleNumber !== undefined ? b.moduleNumber : Infinity;
             return aNum - bNum;
@@ -59,7 +55,6 @@ export default function CertificationDetail() {
     
     fetchData();
 
-    // Check if user is admin
     const checkAdminStatus = async () => {
       if (auth.currentUser) {
         const userEmail = auth.currentUser.email;
@@ -89,8 +84,6 @@ export default function CertificationDetail() {
     
     try {
       const userEmail = auth.currentUser.email;
-      
-      // Find user document by email field
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('email', '==', userEmail));
       const querySnapshot = await getDocs(q);
@@ -98,10 +91,7 @@ export default function CertificationDetail() {
       let userDocId;
       
       if (!querySnapshot.empty) {
-        // Use the first matching document
         userDocId = querySnapshot.docs[0].id;
-        
-        // Check if already enrolled
         const userData = querySnapshot.docs[0].data();
         if (userData.enrolledCertifications?.includes(id)) {
           Alert.alert("Already Enrolled", "You are already enrolled in this certification.");
@@ -114,13 +104,11 @@ export default function CertificationDetail() {
         return;
       }
       
-      // Update the document
       const userRef = doc(db, 'users', userDocId);
       await updateDoc(userRef, {
         enrolledCertifications: arrayUnion(id),
       });
       
-      // Refresh user context
       if (typeof refreshUser === 'function') {
         await refreshUser();
       }
@@ -141,7 +129,6 @@ export default function CertificationDetail() {
     });
   };
 
-  // Function to navigate to the edit certification page
   const navigateToEditCertification = () => {
     router.push({
       pathname: `/editCertification/${id}`,
@@ -170,25 +157,16 @@ export default function CertificationDetail() {
 
   return (
     <ScrollView style={styles.container}>
-      <Image 
-        source={{ uri: cert.image || 'https://via.placeholder.com/800x400?text=No+Image' }} 
-        style={styles.courseImage} 
-        resizeMode="cover" 
-      />
-
       <View style={styles.infoContainer}>
         <Text style={styles.courseTitle}>{cert.title}</Text>
         
-        {/* Admin buttons section - moved outside of enrollment button */}
         {isAdmin && (
           <View style={styles.adminActions}>
-            
             <Button
-              text="/ Edit Course"
+              text="Edit Course"
               onPress={navigateToEditCertification}
               style={styles.actionButton}
             />
-            
           </View>
         )}
 
@@ -244,149 +222,177 @@ export default function CertificationDetail() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F9FB',
     flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F8F9FB',
     padding: 20,
   },
   loadingText: {
     fontFamily: 'winky',
     fontSize: 16,
-    marginTop: 10,
+    color: '#4B5563',
+    marginTop: 12,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F8F9FB',
     padding: 20,
   },
   errorText: {
     fontFamily: 'winky',
     fontSize: 16,
-    color: 'red',
-  },
-  courseImage: {
-    width: '100%',
-    height: 200,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    color: '#DC2626',
   },
   infoContainer: {
     paddingHorizontal: 20,
-    paddingTop: 15,
+    paddingVertical: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 4,
   },
   courseTitle: {
     fontFamily: 'winky-bold',
-    fontSize: 24,
-    marginBottom: 5,
+    fontSize: 28,
+    color: '#1F2A44',
+    marginBottom: 8,
+    lineHeight: 34,
   },
   adminActions: {
-    marginVertical: 15,
-    gap: 10,
+    flexDirection: 'row',
+    gap: 12,
+    marginVertical: 16,
   },
   actionButton: {
-    marginBottom: 5,
-    backgroundColor: Colors.PRIMARY || '#0066FF',
-  },
-  button: {
-    backgroundColor: '#0066FF',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontFamily: 'winky',
-    fontSize: 14,
-    fontWeight: '500',
+    flex: 1,
+    backgroundColor: '#4B5563',
+    borderRadius: 12,
+    paddingVertical: 12,
   },
   chaptersInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 16,
+    backgroundColor: '#F0F5FF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   chaptersText: {
     fontFamily: 'winky',
     fontSize: 14,
-    color: '#666',
+    color: '#3B82F6',
+    fontWeight: '500',
   },
   sectionTitle: {
     fontFamily: 'winky-bold',
-    fontSize: 18,
-    marginBottom: 8,
+    fontSize: 20,
+    color: '#1F2A44',
+    marginBottom: 12,
   },
   description: {
     fontFamily: 'winky',
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 20,
-    marginBottom: 20,
+    fontSize: 16,
+    color: '#4B5563',
+    lineHeight: 24,
+    marginBottom: 24,
   },
   startButton: {
     backgroundColor: '#0066FF',
-    borderRadius: 10,
-    paddingVertical: 15,
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginVertical: 10,
+    marginVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   disabledButton: {
-    backgroundColor: '#99BBFF',
+    backgroundColor: '#93C5FD',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   startButtonText: {
     color: '#FFFFFF',
     fontFamily: 'winky-bold',
     fontSize: 16,
+    fontWeight: '600',
   },
   alreadyEnrolledText: {
-    color: 'green',
+    color: '#15803D',
     fontFamily: 'winky',
     fontSize: 16,
-    marginVertical: 15,
+    marginVertical: 16,
     textAlign: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 8,
   },
   chapterList: {
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingVertical: 24,
   },
   chapterItem: {
     flexDirection: 'row',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 12,
     alignItems: 'center',
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   chapterContent: {
     flexDirection: 'row',
     flex: 1,
+    alignItems: 'center',
+    marginRight: 16, // Added margin between text and play button
   },
   chapterNumber: {
     fontFamily: 'winky-bold',
     fontSize: 16,
-    color: '#333',
+    color: '#1F2A44',
+    marginRight: 12,
+    width: 30,
   },
   chapterTitle: {
     fontFamily: 'winky',
     fontSize: 16,
-    color: '#333',
+    color: '#1F2A44',
     flex: 1,
+    lineHeight: 22,
   },
   arrowIcon: {
-    color: '#0066FF',
-    fontSize: 16,
+    color: '#3B82F6',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   noModulesText: {
     fontFamily: 'winky',
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#6B7280',
     textAlign: 'center',
-    paddingVertical: 20,
-  }
+    paddingVertical: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+  },
 });
