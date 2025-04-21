@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+  Platform,
+} from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../config/firebaseConfig';
@@ -14,51 +24,56 @@ export default function ModuleDetail() {
   useEffect(() => {
     const fetchModuleData = async () => {
       try {
-        // Fetch module details
         const moduleRef = doc(db, 'modules', id);
         const moduleSnap = await getDoc(moduleRef);
-        
+
         if (moduleSnap.exists()) {
           setModule(moduleSnap.data());
-          
-          // Count available questions for this module
+
           const questionsQuery = query(
             collection(db, 'questions'),
             where('moduleId', '==', id)
           );
-          
+
           const questionsSnap = await getDocs(questionsQuery);
           setQuestionCount(questionsSnap.size);
         } else {
           Alert.alert("Error", "Module not found");
+          router.back();
         }
       } catch (error) {
         console.error("Error fetching module data:", error);
         Alert.alert("Error", "Failed to load module details");
+        router.back();
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchModuleData();
   }, [id]);
 
-  const startTest = async (questionLimit) => {
+  const startTest = (questionLimit) => {
     try {
       if (questionCount === 0) {
         Alert.alert("No Questions", "There are no questions available for this module yet.");
         return;
       }
 
-      // Calculate how many questions to use
       const actualQuestionCount = Math.min(questionCount, questionLimit);
-      
-      // Navigate to the test screen
+
+      if (questionCount < questionLimit) {
+           Alert.alert(
+              "Not Enough Questions",
+              `This module only has ${questionCount} question(s) available. Starting test with ${actualQuestionCount} question(s).`
+           );
+      }
+
       router.push({
         pathname: `/mockTest/${id}`,
         params: {
           moduleId: id,
-          moduleTitle: module.title || title,
+          moduleTitle: module?.title || title,
           questionLimit: actualQuestionCount
         }
       });
@@ -68,178 +83,281 @@ export default function ModuleDetail() {
     }
   };
 
+   const testOptions = [
+      { limit: 10, title: 'Quick Test', timeEstimate: '~10-15 mins' },
+      { limit: 25, title: 'Standard Test', timeEstimate: '~25-35 mins' },
+      { limit: 40, title: 'Comprehensive Test', timeEstimate: '~40-60 mins' },
+      { limit: 100, title: 'Full Mock Test', timeEstimate: '~120 mins', requires: 100 }, // Requires 100 questions to be shown
+   ];
+
+
+  // --- Loading State UI ---
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.PRIMARY || '#0066FF'} />
         <Text style={styles.loadingText}>Loading module details...</Text>
-      </View>
-    );
-  }
-  
-  if (!module) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Module not found</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
+  // --- Error State UI (Module not found) ---
+  if (!module) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <Text style={styles.errorText}>Module not found.</Text>
+        <TouchableOpacity style={styles.goBackButton} onPress={() => router.back()}>
+           <Text style={styles.goBackButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // --- Module Details UI ---
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      {/* Header outside ScrollView */}
       <View style={styles.header}>
         <Text style={styles.moduleTitle}>{module.title || title}</Text>
       </View>
-      
-      <View style={styles.infoContainer}>
-        <Text style={styles.sectionTitle}>Description:</Text>
-        <Text style={styles.description}>{module.description}</Text>
-        
-        <View style={styles.questionsInfo}>
-          <Text style={styles.questionsAvailable}>
-            {questionCount} questions available for this module
-          </Text>
+
+      <ScrollView style={styles.scrollViewContent}>
+        <View style={styles.infoCard}>
+           <Text style={styles.sectionTitle}>Description</Text>
+           <Text style={styles.description}>{module.description}</Text>
+
+           <View style={styles.questionsInfo}>
+             {/* Refactored Text structure to potentially help with the warning */}
+             <Text style={styles.questionsAvailable}>
+                <Text style={{ fontWeight: '700' }}>{questionCount}</Text>
+                {` question${questionCount === 1 ? '' : 's'} available for this module`}
+             </Text>
+           </View>
         </View>
-        
-        <View style={styles.testSection}>
-          <Text style={styles.sectionTitle}>Take a Test</Text>
-          <Text style={styles.testDescription}>
-            Challenge yourself with a timed test. Questions will be randomly selected
-            with 50% easy, 30% medium, and 20% hard difficulty.
-          </Text>
-          
-          <View style={styles.testOptionsContainer}>
-            <TouchableOpacity 
-              style={styles.testOption}
-              onPress={() => startTest(10)}
-            >
-              <Text style={styles.testOptionTitle}>Quick Test</Text>
-              <Text style={styles.testOptionDetail}>10 questions ({questionCount < 10 ? `${questionCount} available` : 'Available'})</Text>
-              <Text style={styles.testOptionTime}>10 minutes</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.testOption}
-              onPress={() => startTest(25)}
-            >
-              <Text style={styles.testOptionTitle}>Standard Test</Text>
-              <Text style={styles.testOptionDetail}>25 questions ({questionCount < 25 ? `${questionCount} available` : 'Available'})</Text>
-              <Text style={styles.testOptionTime}>25 minutes</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.testOption}
-              onPress={() => startTest(40)}
-            >
-              <Text style={styles.testOptionTitle}>Comprehensive Test</Text>
-              <Text style={styles.testOptionDetail}>40 questions ({questionCount < 40 ? `${questionCount} available` : 'Available'})</Text>
-              <Text style={styles.testOptionTime}>40 minutes</Text>
-            </TouchableOpacity>
-          </View>
+
+
+        <View style={styles.testSectionCard}>
+           <Text style={styles.sectionTitle}>Take a Test</Text>
+           <Text style={styles.testDescription}>
+             Choose a test length below. Questions are selected randomly from the available pool.
+           </Text>
+
+           <View style={styles.testOptionsContainer}>
+             {testOptions.map((option) => {
+               // Only show full mock test if enough questions exist
+               if (option.requires && questionCount < option.requires) {
+                 return null;
+               }
+
+               const isPartiallyAvailable = questionCount > 0 && questionCount < option.limit;
+               const isDisabled = questionCount === 0;
+
+               return (
+                 <TouchableOpacity
+                   key={option.limit}
+                   // Apply disabled style if totally disabled or partially available
+                   style={[
+                     styles.testOptionButton,
+                     (isDisabled || isPartiallyAvailable) && styles.testOptionDisabled
+                   ]}
+                   onPress={() => startTest(option.limit)}
+                   disabled={isDisabled} // Button is truly disabled only if no questions
+                 >
+                   {/* Wrap text content in a View to address the warning */}
+                   <View>
+                     <Text style={styles.testOptionTitle}>{option.title}</Text>
+                     <Text style={styles.testOptionDetail}>
+                       {isPartiallyAvailable
+                         ? `(${questionCount} available)`
+                         : `(${option.limit} questions)`
+                       }
+                     </Text>
+                     <Text style={styles.testOptionTime}>{option.timeEstimate}</Text>
+                   </View>
+                 </TouchableOpacity>
+               );
+             })}
+           </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
     flex: 1,
+    backgroundColor: '#F5F7FA',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5F7FA',
     padding: 20,
   },
   loadingText: {
-    fontFamily: 'winky',
     fontSize: 16,
-    marginTop: 10,
+    marginTop: 16,
+    color: '#555',
+    fontWeight: '500',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5F7FA',
     padding: 20,
   },
   errorText: {
-    fontFamily: 'winky',
-    fontSize: 16,
-    color: 'red',
+    fontSize: 18,
+    color: '#FF3B30',
+    fontWeight: '600',
+    marginBottom: 20,
+    textAlign: 'center',
   },
+   goBackButton: {
+      backgroundColor: Colors.PRIMARY || '#0066FF',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+   },
+   goBackButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+   },
   header: {
-    backgroundColor: '#0066FF',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   moduleTitle: {
-    fontFamily: 'winky-bold',
-    fontSize: 24,
-    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
   },
-  infoContainer: {
-    padding: 20,
+  scrollViewContent: {
+    padding: 16,
+    paddingBottom: 30,
+  },
+  infoCard: {
+     backgroundColor: '#FFFFFF',
+     borderRadius: 12,
+     padding: 20,
+     marginBottom: 20,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.08,
+          shadowRadius: 2,
+        },
+        android: {
+          elevation: 2,
+        },
+     }),
   },
   sectionTitle: {
-    fontFamily: 'winky-bold',
     fontSize: 18,
-    marginBottom: 8,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
   },
   description: {
-    fontFamily: 'winky',
-    fontSize: 14,
+    fontSize: 15,
     color: '#555',
-    lineHeight: 20,
+    lineHeight: 22,
     marginBottom: 20,
   },
   questionsInfo: {
-    backgroundColor: '#F0F8FF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 20,
+    backgroundColor: '#E8F0FE',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.PRIMARY || '#0066FF',
   },
   questionsAvailable: {
-    fontFamily: 'winky',
     fontSize: 14,
-    color: '#0066FF',
+    color: '#333',
+    fontWeight: '500',
   },
-  testSection: {
-    marginTop: 10,
+  testSectionCard: {
+     backgroundColor: '#FFFFFF',
+     borderRadius: 12,
+     padding: 20,
+     marginBottom: 20,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.08,
+          shadowRadius: 2,
+        },
+        android: {
+          elevation: 2,
+        },
+     }),
   },
   testDescription: {
-    fontFamily: 'winky',
-    fontSize: 14,
+    fontSize: 15,
     color: '#555',
     marginBottom: 15,
+    lineHeight: 22,
   },
   testOptionsContainer: {
-    gap: 15,
+    gap: 12,
   },
-  testOption: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    padding: 15,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0066FF',
+  testOptionButton: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+     ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 1,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
   },
+   testOptionDisabled: {
+      opacity: 0.6,
+      backgroundColor: '#F0F0F0',
+   },
   testOptionTitle: {
-    fontFamily: 'winky-bold',
     fontSize: 16,
-    marginBottom: 5,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
   testOptionDetail: {
-    fontFamily: 'winky',
     fontSize: 14,
-    color: '#555',
+    color: '#666',
+    marginBottom: 4,
   },
   testOptionTime: {
-    fontFamily: 'winky',
-    fontSize: 14,
-    color: '#0066FF',
-    marginTop: 5,
+    fontSize: 13,
+    color: Colors.PRIMARY || '#0066FF',
+    fontWeight: '500',
   },
 });

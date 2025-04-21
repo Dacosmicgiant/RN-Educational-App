@@ -1,8 +1,8 @@
 // Path: app/editCertification/[id]/index.js
 
-import { View, Text, TextInput, Alert, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, Alert, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
 import React, { useState, useEffect } from 'react';
-import { useLocalSearchParams, router } from 'expo-router'; // Updated to use expo-router
+import { useLocalSearchParams, router } from 'expo-router';
 import Colors from '../../../constants/Colors';
 import Button from '../../../components/Shared/Button';
 import {
@@ -21,9 +21,8 @@ import { db } from '../../../config/firebaseConfig';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export default function EditCertification() {
-  // Use useLocalSearchParams to get the ID from the dynamic route
   const { id, certificationId } = useLocalSearchParams();
-  const actualId = id || certificationId; // Use whichever is available
+  const actualId = id || certificationId;
 
   const [certification, setCertification] = useState(null);
   const [title, setTitle] = useState('');
@@ -39,17 +38,18 @@ export default function EditCertification() {
       if (!actualId) {
         Alert.alert('Error', 'Certification ID is missing.');
         setLoading(false);
+        router.back();
         return;
       }
 
       try {
-        // Fetch certification details
         const certDocRef = doc(db, 'certifications', actualId);
         const certDocSnap = await getDoc(certDocRef);
 
         if (!certDocSnap.exists()) {
           Alert.alert('Error', 'Certification not found.');
           setLoading(false);
+           router.back();
           return;
         }
 
@@ -59,7 +59,6 @@ export default function EditCertification() {
         setDescription(certData.description || '');
         setImage(certData.image || '');
 
-        // Fetch modules associated with this certification
         const modulesQuery = query(
           collection(db, 'modules'),
           where('certificationId', '==', actualId)
@@ -68,11 +67,11 @@ export default function EditCertification() {
 
         const fetchedModules = modulesSnapshot.docs.map(doc => ({
           id: doc.id,
+          // Removed content field from fetch
           ...doc.data(),
           moduleNumber: parseInt(doc.data().moduleNumber, 10) || 0
         }));
 
-        // Sort modules by moduleNumber
         fetchedModules.sort((a, b) => a.moduleNumber - b.moduleNumber);
 
         setModuleFields(fetchedModules);
@@ -81,6 +80,7 @@ export default function EditCertification() {
       } catch (error) {
         console.error('Error fetching certification data:', error);
         Alert.alert('Error', 'Failed to fetch certification data.');
+         router.back();
       } finally {
         setLoading(false);
       }
@@ -97,7 +97,15 @@ export default function EditCertification() {
 
     setModuleFields([
       ...moduleFields,
-      { id: tempId, title: '', description: '', moduleNumber: suggestedModuleNumber, isNew: true }
+      {
+        id: tempId,
+        title: '',
+        description: '',
+        moduleNumber: suggestedModuleNumber,
+        // Removed content from new module state
+        // content: '',
+        isNew: true
+      }
     ]);
   };
 
@@ -108,8 +116,8 @@ export default function EditCertification() {
   const updateModuleField = (index, field, value) => {
     const updatedModules = [...moduleFields];
     if (field === 'moduleNumber') {
-      const numberValue = parseInt(value, 10);
-      updatedModules[index][field] = numberValue;
+       const numberValue = value === '' ? '' : parseInt(value, 10);
+       updatedModules[index][field] = numberValue;
     } else {
       updatedModules[index][field] = value;
     }
@@ -117,7 +125,7 @@ export default function EditCertification() {
   };
 
   const handleUpdateCertification = async () => {
-    if (!title || !description) {
+    if (!title.trim() || !description.trim()) {
       Alert.alert('Validation Error', 'Please fill all required certification fields.');
       return;
     }
@@ -132,106 +140,116 @@ export default function EditCertification() {
     }
 
     const moduleNumbers = [];
-    const invalidModuleNumbers = moduleFields.filter(module => {
-      const num = module.moduleNumber;
-      const isValid = typeof num === 'number' && Number.isInteger(num) && num > 0;
-      if (isValid) {
-        moduleNumbers.push(num);
-      }
-      return !isValid;
+    let validationError = null;
+
+    moduleFields.forEach((module) => {
+        const num = module.moduleNumber;
+        const isValid = num === '' || (typeof num === 'number' && Number.isInteger(num) && num > 0);
+
+        if (!isValid) {
+             validationError = 'All module numbers must be valid positive integers.';
+             return;
+        }
+        if (num !== '') {
+             moduleNumbers.push(num);
+        }
     });
 
-    if (invalidModuleNumbers.length > 0) {
-      Alert.alert('Validation Error', 'All module numbers must be valid positive integers.');
-      return;
-    }
+     if (validationError) {
+         Alert.alert('Validation Error', validationError);
+         return;
+     }
 
     const uniqueModuleNumbers = new Set(moduleNumbers);
     if (uniqueModuleNumbers.size !== moduleNumbers.length) {
-      Alert.alert('Validation Error', 'All module numbers must be unique.');
-      return;
+        Alert.alert('Validation Error', 'All module numbers must be unique.');
+        return;
     }
+
+     if (moduleFields.length === 0) {
+          Alert.alert('Validation Error', 'A certification must have at least one module.');
+          return;
+     }
+
 
     setSaving(true);
     const batch = writeBatch(db);
 
     try {
-      // Update the main certification document
       const certDocRef = doc(db, 'certifications', actualId);
       batch.update(certDocRef, {
-        title,
-        description,
-        image: image || null,
+        title: title.trim(),
+        description: description.trim(),
+        image: image.trim() || null,
       });
 
-      // Handle module updates, additions, and deletions
-      const currentModuleTempAndFirestoreIds = new Set(moduleFields.map(m => m.id));
+      const currentModuleFirestoreIds = new Set(moduleFields.filter(m => !m.isNew).map(m => m.id));
 
-      // Identify modules to delete
-      const modulesToDelete = originalModuleIds.filter(id => !currentModuleTempAndFirestoreIds.has(id));
+      const modulesToDelete = originalModuleIds.filter(id => !currentModuleFirestoreIds.has(id));
 
       modulesToDelete.forEach(moduleId => {
         const moduleDocRef = doc(db, 'modules', moduleId);
         batch.delete(moduleDocRef);
 
         const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', moduleId);
-        batch.delete(certSubcollectionDocRef);
+         batch.delete(certSubcollectionDocRef).catch(e => console.warn("Could not delete module subcollection doc:", e));
       });
 
-      // Sort modules by moduleNumber
-      const sortedModuleFields = [...moduleFields].sort((a, b) => a.moduleNumber - b.moduleNumber);
+      const sortedModuleFields = [...moduleFields].sort((a, b) => {
+           return (typeof a.moduleNumber === 'number' ? a.moduleNumber : Infinity) - (typeof b.moduleNumber === 'number' ? b.moduleNumber : Infinity);
+       });
 
-      // Process modules for update or addition
       for (const module of sortedModuleFields) {
-        if (module.id && module.id.startsWith('new_')) {
-          // New module
-          const newModuleRef = doc(collection(db, 'modules'));
-          const newModuleId = newModuleRef.id;
+         if (typeof module.moduleNumber === 'number' && module.moduleNumber > 0 && module.title.trim() !== '') {
+            if (module.isNew) {
+              const newModuleRef = doc(collection(db, 'modules'));
+              const newModuleId = newModuleRef.id;
 
-          batch.set(newModuleRef, {
-            title: module.title,
-            description: module.description,
-            moduleNumber: module.moduleNumber,
-            certificationId: actualId,
-            questionCount: 0,
-            createdAt: new Date(),
-          });
+              batch.set(newModuleRef, {
+                title: module.title.trim(),
+                description: module.description.trim(),
+                moduleNumber: module.moduleNumber,
+                // Removed content field from new module save
+                // content: module.content.trim() || '',
+                certificationId: actualId,
+                questionCount: 0,
+                createdAt: new Date(),
+              });
 
-          // Add to certification's subcollection
-          const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', newModuleId);
-          batch.set(certSubcollectionDocRef, {
-            moduleId: newModuleId,
-            title: module.title,
-            moduleNumber: module.moduleNumber,
-          });
-        } else if (module.id) {
-          // Existing module - update it
-          const moduleDocRef = doc(db, 'modules', module.id);
-          batch.update(moduleDocRef, {
-            title: module.title,
-            description: module.description,
-            moduleNumber: module.moduleNumber,
-          });
+              const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', newModuleId);
+              batch.set(certSubcollectionDocRef, {
+                moduleId: newModuleId,
+                title: module.title.trim(),
+                moduleNumber: module.moduleNumber,
+              });
 
-          // Update in certification's subcollection
-          const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', module.id);
-          batch.update(certSubcollectionDocRef, {
-            title: module.title,
-            moduleNumber: module.moduleNumber,
-          });
-        }
+            } else {
+              const moduleDocRef = doc(db, 'modules', module.id);
+              batch.update(moduleDocRef, {
+                title: module.title.trim(),
+                description: module.description.trim(),
+                moduleNumber: module.moduleNumber,
+                // Removed content field from existing module update
+                // content: module.content.trim() || '',
+              });
+
+              const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', module.id);
+              batch.update(certSubcollectionDocRef, {
+                title: module.title.trim(),
+                moduleNumber: module.moduleNumber,
+              });
+            }
+         }
       }
 
-      // Update module count
       batch.update(certDocRef, {
-        moduleCount: moduleFields.length
+        moduleCount: moduleFields.filter(m => typeof m.moduleNumber === 'number' && Number.isInteger(m.moduleNumber) && m.moduleNumber > 0 && m.title.trim() !== '').length
       });
 
-      // Commit all changes
       await batch.commit();
 
       Alert.alert('Success', 'Certification updated successfully!');
-      router.back(); // Navigate back using Expo Router
+      router.back();
 
     } catch (error) {
       console.error('Error updating certification:', error);
@@ -241,151 +259,251 @@ export default function EditCertification() {
     }
   };
 
+
+  // --- Loading State UI ---
   if (loading) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color={Colors.PRIMARY} />
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.PRIMARY || '#0066FF'} />
         <Text style={styles.loadingText}>Loading Certification Data...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
-  if (!certification) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Could not load certification details.</Text>
-      </View>
-    );
-  }
+  // --- Error State UI (Certification not found or failed load) ---
+  if (!certification && !loading) {
+     return (
+        <SafeAreaView style={styles.errorContainer}>
+          <Text style={styles.errorText}>Could not load certification details.</Text>
+          <TouchableOpacity style={styles.goBackButton} onPress={() => router.back()}>
+             <Text style={styles.goBackButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+     );
+   }
 
+  // --- Edit Certification UI ---
   return (
-    <ScrollView contentContainerStyle={{
-      padding: 25,
-      backgroundColor: Colors.WHITE,
-      flexGrow: 1,
-    }}>
-      <Text style={styles.heading}>Edit Certification</Text>
+    <SafeAreaView style={styles.container}>
+         <ScrollView contentContainerStyle={styles.scrollViewContent}>
+            <Text style={styles.heading}>Edit Certification</Text>
 
-      <Text style={styles.subHeading}>Certification Details</Text>
-      <TextInput
-        placeholder='Certification Title'
-        style={styles.TextInput}
-        value={title}
-        onChangeText={setTitle}
-      />
-      <TextInput
-        placeholder='Short Description'
-        style={styles.TextInput}
-        value={description}
-        onChangeText={setDescription}
-        multiline
-        numberOfLines={3}
-      />
-      <TextInput
-        placeholder='Image URL (optional)'
-        style={styles.TextInput}
-        value={image}
-        onChangeText={setImage}
-      />
+            <View style={styles.card}>
+              <Text style={styles.subHeading}>Certification Details</Text>
+              <TextInput
+                placeholder='Certification Title'
+                style={styles.TextInput}
+                value={title}
+                onChangeText={setTitle}
+                 placeholderTextColor="#999"
+              />
+              <TextInput
+                placeholder='Short Description'
+                style={[styles.TextInput, styles.descriptionInput]}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={3}
+                 placeholderTextColor="#999"
+                 textAlignVertical="top"
+              />
+              <TextInput
+                placeholder='Image URL (optional)'
+                style={styles.TextInput}
+                value={image}
+                onChangeText={setImage}
+                 placeholderTextColor="#999"
+                 keyboardType="url"
+              />
+            </View>
 
-      <Text style={styles.subHeading}>Modules ({moduleFields.length})</Text>
-      {moduleFields.map((module, index) => (
-        <View key={module.id} style={styles.moduleContainer}>
-          <View style={styles.moduleHeader}>
-            <Text style={styles.moduleHeading}>Module Details</Text>
-            <TouchableOpacity onPress={() => removeModuleField(index)} style={styles.removeButton}>
-              <MaterialIcons name="remove-circle-outline" size={24} color={Colors.DANGER || 'red'} />
-            </TouchableOpacity>
-          </View>
+            <View style={styles.card}>
+              <Text style={styles.subHeading}>Modules ({moduleFields.length})</Text>
+              {moduleFields.map((module, index) => (
+                <View key={module.id} style={styles.moduleContainer}>
+                  <View style={styles.moduleHeader}>
+                    <Text style={styles.moduleHeading}>
+                        Module {typeof module.moduleNumber === 'number' && Number.isInteger(module.moduleNumber) && module.moduleNumber > 0
+                           ? module.moduleNumber
+                           : (module.moduleNumber === '' ? '(-)' : '(Invalid)')} Details
+                    </Text>
+                    {moduleFields.length > 1 && (
+                      <TouchableOpacity onPress={() => removeModuleField(index)} style={styles.removeButton}>
+                        <MaterialIcons name="remove-circle-outline" size={24} color={Colors.DANGER || 'red'} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
-          <TextInput
-            placeholder='Module Number'
-            style={styles.TextInput}
-            value={isNaN(module.moduleNumber) ? '' : String(module.moduleNumber)}
-            onChangeText={(value) => updateModuleField(index, 'moduleNumber', value)}
-            keyboardType="number-pad"
-          />
-          <TextInput
-            placeholder='Module Title'
-            style={styles.TextInput}
-            value={module.title}
-            onChangeText={(value) => updateModuleField(index, 'title', value)}
-          />
-          <TextInput
-            placeholder='Module Description'
-            style={styles.TextInput}
-            value={module.description}
-            onChangeText={(value) => updateModuleField(index, 'description', value)}
-            multiline
-            numberOfLines={2}
-          />
-        </View>
-      ))}
+                  <TextInput
+                    placeholder='Module Number'
+                    style={styles.TextInput}
+                    value={String(module.moduleNumber)}
+                    onChangeText={(value) => updateModuleField(index, 'moduleNumber', value)}
+                    keyboardType="number-pad"
+                     placeholderTextColor="#999"
+                  />
+                  <TextInput
+                    placeholder='Module Title'
+                    style={styles.TextInput}
+                    value={module.title}
+                    onChangeText={(value) => updateModuleField(index, 'title', value)}
+                     placeholderTextColor="#999"
+                  />
+                  <TextInput
+                    placeholder='Module Description'
+                    style={[styles.TextInput, styles.moduleDescriptionInput]}
+                    value={module.description}
+                    onChangeText={(value) => updateModuleField(index, 'description', value)}
+                    multiline
+                    numberOfLines={2}
+                     placeholderTextColor="#999"
+                     textAlignVertical="top"
+                  />
 
-      <Button
-        text={'Add New Module'}
-        onPress={addModuleField}
-        type='secondary'
-        style={styles.addModuleButton}
-      />
+                   {/* Removed Module Content Input */}
+                   {/*
+                  <TextInput
+                    placeholder='Module Content (optional)'
+                    style={[styles.TextInput, styles.contentInput]}
+                    value={module.content}
+                    onChangeText={(value) => updateModuleField(index, 'content', value)}
+                    multiline
+                    numberOfLines={6}
+                     placeholderTextColor="#999"
+                     textAlignVertical="top"
+                  />
+                  */}
+                </View>
+              ))}
 
-      <Button
-        text={'Save Changes'}
-        onPress={handleUpdateCertification}
-        loading={saving}
-        type='primary'
-        style={styles.saveButton}
-      />
-    </ScrollView>
+              <Button
+                text={'Add New Module'}
+                onPress={addModuleField}
+                type='secondary'
+                style={styles.addModuleButton}
+              />
+            </View>
+
+
+            <Button
+              text={'Save Changes'}
+              onPress={handleUpdateCertification}
+              loading={saving}
+              type='primary'
+              style={styles.saveButton}
+            />
+
+             <View style={{ height: 30 }} />
+
+         </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.WHITE,
-    padding: 20,
+    backgroundColor: '#F5F7FA',
   },
   loadingContainer: {
-    // specific styles if needed
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F7FA',
+    padding: 20,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 16,
-    fontFamily: 'winky',
-    color: Colors.GRAY,
+    fontWeight: '500',
+    color: '#555',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F7FA',
+    padding: 20,
   },
   errorText: {
     fontSize: 18,
-    fontFamily: 'winky-bold',
-    color: Colors.DANGER, // Assuming you have a DANGER color
+    fontWeight: '600',
+    color: Colors.DANGER || 'red',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+   goBackButton: {
+      backgroundColor: Colors.PRIMARY || '#0066FF',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+   },
+   goBackButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+   },
+  scrollViewContent: {
+    padding: 16,
+    backgroundColor: '#F5F7FA',
+    flexGrow: 1,
   },
   heading: {
-    fontFamily: 'winky-bold',
-    fontSize: 28,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
     marginBottom: 20,
+    textAlign: 'center',
+  },
+  card: {
+     backgroundColor: '#FFFFFF',
+     borderRadius: 12,
+     padding: 20,
+     marginBottom: 20,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.08,
+          shadowRadius: 2,
+        },
+        android: {
+          elevation: 2,
+        },
+     }),
   },
   subHeading: {
-    fontFamily: 'winky-bold',
     fontSize: 20,
-    marginTop: 10,
-    marginBottom: 10,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 5,
+    marginBottom: 15,
   },
   TextInput: {
     borderWidth: 1,
-    borderColor: Colors.GRAY,
-    padding: 15,
-    borderRadius: 10,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
     fontSize: 16,
     marginBottom: 15,
-    fontFamily: 'winky',
+    color: '#333',
   },
+   descriptionInput: {
+      minHeight: 80,
+   },
+   moduleDescriptionInput: {
+      minHeight: 80,
+   },
+   // Removed contentInput style
+   // contentInput: {
+   //    minHeight: 150,
+   // },
   moduleContainer: {
     borderWidth: 1,
-    borderColor: Colors.GRAY,
-    borderRadius: 10,
+    borderColor: '#D0D0D0',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
     padding: 15,
     marginBottom: 15,
   },
@@ -396,16 +514,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   moduleHeading: {
-    fontFamily: 'winky-bold',
     fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
   },
   removeButton: {
-    padding: 5,
+    padding: 4,
   },
   addModuleButton: {
+    marginTop: 5,
     marginBottom: 20,
   },
   saveButton: {
-    marginBottom: 40,
+    marginTop: 10,
   }
 });
