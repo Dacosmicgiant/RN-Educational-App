@@ -49,7 +49,7 @@ export default function EditCertification() {
         if (!certDocSnap.exists()) {
           Alert.alert('Error', 'Certification not found.');
           setLoading(false);
-           router.back();
+          router.back();
           return;
         }
 
@@ -65,22 +65,44 @@ export default function EditCertification() {
         );
         const modulesSnapshot = await getDocs(modulesQuery);
 
-        const fetchedModules = modulesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          // Removed content field from fetch
-          ...doc.data(),
-          moduleNumber: parseInt(doc.data().moduleNumber, 10) || 0
-        }));
+        // Log the raw data from Firebase for debugging
+        console.log('Raw modules from Firebase:', modulesSnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})));
 
+        const fetchedModules = modulesSnapshot.docs.map((doc, index) => {
+          const data = doc.data();
+          
+          // Assign module number based on priority:
+          // 1. Use existing moduleNumber if it's a number
+          // 2. Try to parse moduleNumber if it's a string
+          // 3. Fall back to the index position + 1 if all else fails
+          let moduleNumber;
+          if (typeof data.moduleNumber === 'number') {
+            moduleNumber = data.moduleNumber;
+          } else if (data.moduleNumber && !isNaN(parseInt(data.moduleNumber, 10))) {
+            moduleNumber = parseInt(data.moduleNumber, 10);
+          } else {
+            moduleNumber = index + 1;
+          }
+          
+          return {
+            id: doc.id,
+            ...data,
+            moduleNumber: moduleNumber
+          };
+        });
+
+        // Sort modules by module number
         fetchedModules.sort((a, b) => a.moduleNumber - b.moduleNumber);
-
+        
+        console.log('Processed modules after fetch:', fetchedModules);
+        
         setModuleFields(fetchedModules);
         setOriginalModuleIds(fetchedModules.map(m => m.id));
 
       } catch (error) {
         console.error('Error fetching certification data:', error);
         Alert.alert('Error', 'Failed to fetch certification data.');
-         router.back();
+        router.back();
       } finally {
         setLoading(false);
       }
@@ -102,8 +124,6 @@ export default function EditCertification() {
         title: '',
         description: '',
         moduleNumber: suggestedModuleNumber,
-        // Removed content from new module state
-        // content: '',
         isNew: true
       }
     ]);
@@ -116,8 +136,9 @@ export default function EditCertification() {
   const updateModuleField = (index, field, value) => {
     const updatedModules = [...moduleFields];
     if (field === 'moduleNumber') {
-       const numberValue = value === '' ? '' : parseInt(value, 10);
-       updatedModules[index][field] = numberValue;
+      // For module number, we need to ensure it's a number
+      const numValue = value === '' ? '' : parseInt(value, 10);
+      updatedModules[index][field] = numValue;
     } else {
       updatedModules[index][field] = value;
     }
@@ -139,38 +160,40 @@ export default function EditCertification() {
       return;
     }
 
-    const moduleNumbers = [];
-    let validationError = null;
-
-    moduleFields.forEach((module) => {
-        const num = module.moduleNumber;
-        const isValid = num === '' || (typeof num === 'number' && Number.isInteger(num) && num > 0);
-
-        if (!isValid) {
-             validationError = 'All module numbers must be valid positive integers.';
-             return;
-        }
-        if (num !== '') {
-             moduleNumbers.push(num);
-        }
+    // Fix any missing or invalid module numbers
+    const processedModules = moduleFields.map((module, index) => {
+      // If module number is missing, empty, or invalid, assign based on position
+      let moduleNumber = module.moduleNumber;
+      if (moduleNumber === '' || moduleNumber === undefined || isNaN(moduleNumber)) {
+        moduleNumber = index + 1;
+      } else if (typeof moduleNumber !== 'number') {
+        moduleNumber = parseInt(moduleNumber, 10);
+        if (isNaN(moduleNumber)) moduleNumber = index + 1;
+      }
+      
+      return {
+        ...module,
+        moduleNumber: moduleNumber
+      };
     });
 
-     if (validationError) {
-         Alert.alert('Validation Error', validationError);
-         return;
-     }
-
+    // Ensure all module numbers are unique
+    const moduleNumbers = processedModules.map(m => m.moduleNumber);
     const uniqueModuleNumbers = new Set(moduleNumbers);
+    
     if (uniqueModuleNumbers.size !== moduleNumbers.length) {
-        Alert.alert('Validation Error', 'All module numbers must be unique.');
-        return;
+      // If we have duplicates, reassign all module numbers sequentially
+      processedModules.forEach((module, index) => {
+        module.moduleNumber = index + 1;
+      });
     }
 
-     if (moduleFields.length === 0) {
-          Alert.alert('Validation Error', 'A certification must have at least one module.');
-          return;
-     }
+    console.log('Modules to save:', processedModules);
 
+    if (processedModules.length === 0) {
+      Alert.alert('Validation Error', 'A certification must have at least one module.');
+      return;
+    }
 
     setSaving(true);
     const batch = writeBatch(db);
@@ -183,82 +206,142 @@ export default function EditCertification() {
         image: image.trim() || null,
       });
 
-      const currentModuleFirestoreIds = new Set(moduleFields.filter(m => !m.isNew).map(m => m.id));
-
+      const currentModuleFirestoreIds = new Set(processedModules.filter(m => !m.isNew).map(m => m.id));
       const modulesToDelete = originalModuleIds.filter(id => !currentModuleFirestoreIds.has(id));
 
+      // Delete removed modules
       modulesToDelete.forEach(moduleId => {
         const moduleDocRef = doc(db, 'modules', moduleId);
         batch.delete(moduleDocRef);
 
-        const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', moduleId);
-         batch.delete(certSubcollectionDocRef).catch(e => console.warn("Could not delete module subcollection doc:", e));
+        try {
+          const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', moduleId);
+          batch.delete(certSubcollectionDocRef);
+        } catch (e) {
+          console.warn("Could not delete module subcollection doc:", e);
+        }
       });
 
-      const sortedModuleFields = [...moduleFields].sort((a, b) => {
-           return (typeof a.moduleNumber === 'number' ? a.moduleNumber : Infinity) - (typeof b.moduleNumber === 'number' ? b.moduleNumber : Infinity);
-       });
+      // Sort modules by moduleNumber for consistent ordering
+      const sortedModules = [...processedModules].sort((a, b) => a.moduleNumber - b.moduleNumber);
 
-      for (const module of sortedModuleFields) {
-         if (typeof module.moduleNumber === 'number' && module.moduleNumber > 0 && module.title.trim() !== '') {
-            if (module.isNew) {
-              const newModuleRef = doc(collection(db, 'modules'));
-              const newModuleId = newModuleRef.id;
+      for (const module of sortedModules) {
+        if (module.title.trim() !== '') {
+          if (module.isNew) {
+            // Handle new modules
+            const newModuleRef = doc(collection(db, 'modules'));
+            const newModuleId = newModuleRef.id;
 
-              batch.set(newModuleRef, {
-                title: module.title.trim(),
-                description: module.description.trim(),
-                moduleNumber: module.moduleNumber,
-                // Removed content field from new module save
-                // content: module.content.trim() || '',
-                certificationId: actualId,
-                questionCount: 0,
-                createdAt: new Date(),
-              });
+            const newModuleData = {
+              title: module.title.trim(),
+              description: module.description.trim(),
+              moduleNumber: module.moduleNumber,
+              certificationId: actualId,
+              questionCount: 0,
+              createdAt: new Date(),
+            };
+            
+            console.log(`Creating new module with id ${newModuleId}:`, newModuleData);
+            batch.set(newModuleRef, newModuleData);
 
-              const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', newModuleId);
-              batch.set(certSubcollectionDocRef, {
-                moduleId: newModuleId,
-                title: module.title.trim(),
-                moduleNumber: module.moduleNumber,
-              });
+            const subCollectionData = {
+              moduleId: newModuleId,
+              title: module.title.trim(),
+              moduleNumber: module.moduleNumber,
+            };
+            
+            const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', newModuleId);
+            batch.set(certSubcollectionDocRef, subCollectionData);
+          } else {
+            // Handle existing modules
+            const moduleDocRef = doc(db, 'modules', module.id);
+            
+            const updateData = {
+              title: module.title.trim(),
+              description: module.description.trim(),
+              moduleNumber: module.moduleNumber,
+            };
+            
+            console.log(`Updating existing module ${module.id}:`, updateData);
+            batch.update(moduleDocRef, updateData);
 
-            } else {
-              const moduleDocRef = doc(db, 'modules', module.id);
-              batch.update(moduleDocRef, {
-                title: module.title.trim(),
-                description: module.description.trim(),
-                moduleNumber: module.moduleNumber,
-                // Removed content field from existing module update
-                // content: module.content.trim() || '',
-              });
-
+            try {
               const certSubcollectionDocRef = doc(db, 'certifications', actualId, 'modules', module.id);
               batch.update(certSubcollectionDocRef, {
                 title: module.title.trim(),
                 moduleNumber: module.moduleNumber,
               });
+            } catch (e) {
+              console.warn(`Could not update subcollection for module ${module.id}:`, e);
             }
-         }
+          }
+        }
       }
 
+      // Update module count on certification
       batch.update(certDocRef, {
-        moduleCount: moduleFields.filter(m => typeof m.moduleNumber === 'number' && Number.isInteger(m.moduleNumber) && m.moduleNumber > 0 && m.title.trim() !== '').length
+        moduleCount: sortedModules.filter(m => m.title.trim() !== '').length
       });
 
+      // Commit all changes at once
+      console.log('Committing batch update to Firebase...');
       await batch.commit();
 
+      // We're now refreshing the data after successful save instead of navigating back
       Alert.alert('Success', 'Certification updated successfully!');
-      router.back();
+      
+      // Refresh the module data after update
+      setLoading(true);
+      try {
+        const certDocRef = doc(db, 'certifications', actualId);
+        const certDocSnap = await getDoc(certDocRef);
+        
+        if (certDocSnap.exists()) {
+          const certData = certDocSnap.data();
+          setCertification(certData);
+          setTitle(certData.title || '');
+          setDescription(certData.description || '');
+          setImage(certData.image || '');
+          
+          const modulesQuery = query(
+            collection(db, 'modules'),
+            where('certificationId', '==', actualId)
+          );
+          const modulesSnapshot = await getDocs(modulesQuery);
+          
+          const refreshedModules = modulesSnapshot.docs.map((doc) => {
+            const data = doc.data();
+            
+            return {
+              id: doc.id,
+              ...data,
+              moduleNumber: typeof data.moduleNumber === 'number' ? 
+                data.moduleNumber : 
+                (data.moduleNumber && !isNaN(parseInt(data.moduleNumber, 10)) ? 
+                  parseInt(data.moduleNumber, 10) : 1)
+            };
+          });
+          
+          // Sort modules by module number
+          refreshedModules.sort((a, b) => a.moduleNumber - b.moduleNumber);
+          
+          setModuleFields(refreshedModules);
+          setOriginalModuleIds(refreshedModules.map(m => m.id));
+        }
+      } catch (error) {
+        console.error('Error refreshing data:', error);
+        Alert.alert('Note', 'Changes saved but could not refresh data. Please reload the page.');
+      } finally {
+        setLoading(false);
+      }
 
     } catch (error) {
       console.error('Error updating certification:', error);
-      Alert.alert('Error', 'Failed to update certification.');
+      Alert.alert('Error', `Failed to update certification: ${error.message}`);
     } finally {
       setSaving(false);
     }
   };
-
 
   // --- Loading State UI ---
   if (loading) {
@@ -272,130 +355,115 @@ export default function EditCertification() {
 
   // --- Error State UI (Certification not found or failed load) ---
   if (!certification && !loading) {
-     return (
-        <SafeAreaView style={styles.errorContainer}>
-          <Text style={styles.errorText}>Could not load certification details.</Text>
-          <TouchableOpacity style={styles.goBackButton} onPress={() => router.back()}>
-             <Text style={styles.goBackButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-     );
-   }
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <Text style={styles.errorText}>Could not load certification details.</Text>
+        <TouchableOpacity style={styles.goBackButton} onPress={() => router.back()}>
+          <Text style={styles.goBackButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   // --- Edit Certification UI ---
   return (
     <SafeAreaView style={styles.container}>
-         <ScrollView contentContainerStyle={styles.scrollViewContent}>
-            <Text style={styles.heading}>Edit Certification</Text>
+      <ScrollView contentContainerStyle={styles.scrollViewContent}>
+        <Text style={styles.heading}>Edit Certification</Text>
 
-            <View style={styles.card}>
-              <Text style={styles.subHeading}>Certification Details</Text>
+        <View style={styles.card}>
+          <Text style={styles.subHeading}>Certification Details</Text>
+          <TextInput
+            placeholder='Certification Title'
+            style={styles.TextInput}
+            value={title}
+            onChangeText={setTitle}
+            placeholderTextColor="#999"
+          />
+          <TextInput
+            placeholder='Short Description'
+            style={[styles.TextInput, styles.descriptionInput]}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={3}
+            placeholderTextColor="#999"
+            textAlignVertical="top"
+          />
+          <TextInput
+            placeholder='Image URL (optional)'
+            style={styles.TextInput}
+            value={image}
+            onChangeText={setImage}
+            placeholderTextColor="#999"
+            keyboardType="url"
+          />
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.subHeading}>Modules ({moduleFields.length})</Text>
+          {moduleFields.map((module, index) => (
+            <View key={module.id} style={styles.moduleContainer}>
+              <View style={styles.moduleHeader}>
+                <Text style={styles.moduleHeading}>
+                  Module {typeof module.moduleNumber === 'number' && !isNaN(module.moduleNumber)
+                    ? module.moduleNumber
+                    : index + 1} Details
+                </Text>
+                {moduleFields.length > 1 && (
+                  <TouchableOpacity onPress={() => removeModuleField(index)} style={styles.removeButton}>
+                    <MaterialIcons name="remove-circle-outline" size={24} color={Colors.DANGER || 'red'} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <TextInput
-                placeholder='Certification Title'
+                placeholder='Module Number'
                 style={styles.TextInput}
-                value={title}
-                onChangeText={setTitle}
-                 placeholderTextColor="#999"
+                value={String(module.moduleNumber || '')}
+                onChangeText={(value) => updateModuleField(index, 'moduleNumber', value)}
+                keyboardType="number-pad"
+                placeholderTextColor="#999"
               />
               <TextInput
-                placeholder='Short Description'
-                style={[styles.TextInput, styles.descriptionInput]}
-                value={description}
-                onChangeText={setDescription}
+                placeholder='Module Title'
+                style={styles.TextInput}
+                value={module.title}
+                onChangeText={(value) => updateModuleField(index, 'title', value)}
+                placeholderTextColor="#999"
+              />
+              <TextInput
+                placeholder='Module Description'
+                style={[styles.TextInput, styles.moduleDescriptionInput]}
+                value={module.description}
+                onChangeText={(value) => updateModuleField(index, 'description', value)}
                 multiline
-                numberOfLines={3}
-                 placeholderTextColor="#999"
-                 textAlignVertical="top"
-              />
-              <TextInput
-                placeholder='Image URL (optional)'
-                style={styles.TextInput}
-                value={image}
-                onChangeText={setImage}
-                 placeholderTextColor="#999"
-                 keyboardType="url"
+                numberOfLines={2}
+                placeholderTextColor="#999"
+                textAlignVertical="top"
               />
             </View>
+          ))}
 
-            <View style={styles.card}>
-              <Text style={styles.subHeading}>Modules ({moduleFields.length})</Text>
-              {moduleFields.map((module, index) => (
-                <View key={module.id} style={styles.moduleContainer}>
-                  <View style={styles.moduleHeader}>
-                    <Text style={styles.moduleHeading}>
-                        Module {typeof module.moduleNumber === 'number' && Number.isInteger(module.moduleNumber) && module.moduleNumber > 0
-                           ? module.moduleNumber
-                           : (module.moduleNumber === '' ? '(-)' : '(Invalid)')} Details
-                    </Text>
-                    {moduleFields.length > 1 && (
-                      <TouchableOpacity onPress={() => removeModuleField(index)} style={styles.removeButton}>
-                        <MaterialIcons name="remove-circle-outline" size={24} color={Colors.DANGER || 'red'} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
+          <Button
+            text={'Add New Module'}
+            onPress={addModuleField}
+            type='secondary'
+            style={styles.addModuleButton}
+          />
+        </View>
 
-                  <TextInput
-                    placeholder='Module Number'
-                    style={styles.TextInput}
-                    value={String(module.moduleNumber)}
-                    onChangeText={(value) => updateModuleField(index, 'moduleNumber', value)}
-                    keyboardType="number-pad"
-                     placeholderTextColor="#999"
-                  />
-                  <TextInput
-                    placeholder='Module Title'
-                    style={styles.TextInput}
-                    value={module.title}
-                    onChangeText={(value) => updateModuleField(index, 'title', value)}
-                     placeholderTextColor="#999"
-                  />
-                  <TextInput
-                    placeholder='Module Description'
-                    style={[styles.TextInput, styles.moduleDescriptionInput]}
-                    value={module.description}
-                    onChangeText={(value) => updateModuleField(index, 'description', value)}
-                    multiline
-                    numberOfLines={2}
-                     placeholderTextColor="#999"
-                     textAlignVertical="top"
-                  />
+        <Button
+          text={'Save Changes'}
+          onPress={handleUpdateCertification}
+          loading={saving}
+          type='primary'
+          style={styles.saveButton}
+        />
 
-                   {/* Removed Module Content Input */}
-                   {/*
-                  <TextInput
-                    placeholder='Module Content (optional)'
-                    style={[styles.TextInput, styles.contentInput]}
-                    value={module.content}
-                    onChangeText={(value) => updateModuleField(index, 'content', value)}
-                    multiline
-                    numberOfLines={6}
-                     placeholderTextColor="#999"
-                     textAlignVertical="top"
-                  />
-                  */}
-                </View>
-              ))}
+        <View style={{ height: 30 }} />
 
-              <Button
-                text={'Add New Module'}
-                onPress={addModuleField}
-                type='secondary'
-                style={styles.addModuleButton}
-              />
-            </View>
-
-
-            <Button
-              text={'Save Changes'}
-              onPress={handleUpdateCertification}
-              loading={saving}
-              type='primary'
-              style={styles.saveButton}
-            />
-
-             <View style={{ height: 30 }} />
-
-         </ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -432,17 +500,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-   goBackButton: {
-      backgroundColor: Colors.PRIMARY || '#0066FF',
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-   },
-   goBackButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-   },
+  goBackButton: {
+    backgroundColor: Colors.PRIMARY || '#0066FF',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  goBackButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   scrollViewContent: {
     padding: 16,
     backgroundColor: '#F5F7FA',
@@ -456,21 +524,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   card: {
-     backgroundColor: '#FFFFFF',
-     borderRadius: 12,
-     padding: 20,
-     marginBottom: 20,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.08,
-          shadowRadius: 2,
-        },
-        android: {
-          elevation: 2,
-        },
-     }),
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   subHeading: {
     fontSize: 20,
@@ -489,16 +557,12 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     color: '#333',
   },
-   descriptionInput: {
-      minHeight: 80,
-   },
-   moduleDescriptionInput: {
-      minHeight: 80,
-   },
-   // Removed contentInput style
-   // contentInput: {
-   //    minHeight: 150,
-   // },
+  descriptionInput: {
+    minHeight: 80,
+  },
+  moduleDescriptionInput: {
+    minHeight: 80,
+  },
   moduleContainer: {
     borderWidth: 1,
     borderColor: '#D0D0D0',

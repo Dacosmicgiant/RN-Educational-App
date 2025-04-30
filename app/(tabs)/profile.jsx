@@ -7,7 +7,7 @@ import { signOut } from 'firebase/auth';
 import Colors from '../../constants/Colors';
 import Button from './../../components/Shared/Button';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Profile() {
   const router = useRouter();
@@ -15,60 +15,80 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    console.log('[handleLogout] Logout button pressed. Showing confirmation alert.');
     Alert.alert(
       "Logout",
       "Are you sure you want to logout?",
       [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Logout", 
+        { text: "Cancel", style: "cancel", onPress: () => console.log('[handleLogout] Logout cancelled.') },
+        {
+          text: "Logout",
           onPress: async () => {
+            console.log("[handleLogout] Confirmation received. Attempting Firebase sign out...");
             try {
+              console.log("[handleLogout] Calling signOut(auth)...");
               await signOut(auth);
+              console.log("[handleLogout] Firebase signOut successful.");
+              console.log("[handleLogout] Attempting navigation replace to '/auth/SignIn'...");
               router.replace('/auth/SignIn');
+              console.log("[handleLogout] router.replace('/auth/SignIn') called.");
             } catch (error) {
-              Alert.alert("Logout Failed", error.message);
+              console.error("[handleLogout] Firebase signOut failed:", error);
+              Alert.alert("Logout Failed", `An error occurred: ${error.message}`);
             }
           }
         }
-      ]
+      ],
+      { cancelable: true }
     );
   };
 
   useEffect(() => {
     const fetchUserData = async () => {
+      setCurrentUserData(null);
+      setIsAdmin(false);
+      setLoading(true);
       try {
         const user = auth.currentUser;
         if (!user) {
+          console.log("[useEffect] No current user found.");
           setLoading(false);
           return;
         }
-
+        console.log("[useEffect] Current user found:", user.email);
         const docRef = doc(db, 'users', user.email);
         let snap = await getDoc(docRef);
-
+        console.log(`[useEffect] Attempted getDoc for users/${user.email}. Exists: ${snap.exists()}`);
         if (!snap.exists()) {
+          console.log(`[useEffect] Document users/${user.email} not found. Querying by email field...`);
           const usersRef = collection(db, 'users');
           const q = query(usersRef, where('email', '==', user.email));
           const querySnap = await getDocs(q);
           if (!querySnap.empty) {
             snap = querySnap.docs[0];
+            console.log(`[useEffect] Found user via query. Doc ID: ${snap.id}. Exists: ${snap.exists()}`);
+          } else {
+            console.log("[useEffect] User not found via query either.");
           }
         }
-
         if (snap.exists()) {
           const userData = snap.data();
+          console.log("[useEffect] User data fetched:", userData);
           setCurrentUserData(userData);
-          setIsAdmin(userData.isAdmin === true);
+          setIsAdmin(userData?.isAdmin === true);
+          console.log("[useEffect] IsAdmin state set to:", userData?.isAdmin === true);
+        } else {
+          console.log("[useEffect] No user document found in Firestore for:", user.email);
         }
       } catch (error) {
-        console.error("Error fetching profile data:", error);
+        console.error("[useEffect] Error fetching profile data:", error);
+        Alert.alert("Error", "Could not fetch profile data.");
       } finally {
         setLoading(false);
+        console.log("[useEffect] Fetch process finished. Loading set to false.");
       }
     };
-
     fetchUserData();
   }, []);
 
@@ -81,6 +101,17 @@ export default function Profile() {
     );
   }
 
+  if (!auth.currentUser) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Not logged in.</Text>
+          <Button text="Go to Sign In" onPress={() => router.replace('/auth/SignIn')} style={{ marginTop: 20 }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -88,38 +119,43 @@ export default function Profile() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section */}
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Ionicons name="log-out-outline" size={24} color={Colors.PRIMARY} />
+          <TouchableOpacity
+            onPress={handleLogout}
+            style={styles.logoutButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="log-out-outline" size={26} color={Colors.PRIMARY} />
           </TouchableOpacity>
         </View>
 
-        {/* User Info Section */}
         <View style={styles.userInfoCard}>
           <View style={styles.userTextInfo}>
-            <Text style={styles.userName}>
-              {currentUserData?.name || 'User Name'}
+            <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
+              {currentUserData?.name || 'User Name Not Found'}
             </Text>
-            <Text style={styles.userEmail}>
-              {currentUserData?.email || 'user@example.com'}
+            <Text style={styles.userEmail} numberOfLines={1} ellipsizeMode="tail">
+              {currentUserData?.email || auth.currentUser?.email || 'Email Not Found'}
             </Text>
-            {isAdmin && (
+            {isAdmin === true && (
               <View style={styles.adminBadge}>
                 <Text style={styles.adminText}>Admin</Text>
               </View>
             )}
+            {currentUserData === null && !loading && (
+              <Text style={styles.warningText}>Could not load profile details from database.</Text>
+            )}
           </View>
         </View>
 
-        {/* Admin Actions */}
         {isAdmin && (
           <View style={styles.adminSection}>
             <Text style={styles.sectionTitle}>Admin Actions</Text>
@@ -128,13 +164,13 @@ export default function Profile() {
                 text="Create New Course"
                 onPress={() => router.push('/addCertification')}
                 style={styles.adminButton}
-                icon={<Ionicons name="add-circle" size={20} color="#FFF" />}
+                icon={<Ionicons name="add-circle-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />}
               />
               <Button
                 text="Add Questions to Module"
                 onPress={() => router.push('/addQuestion')}
                 style={styles.adminButton}
-                icon={<Ionicons name="help-circle" size={20} color="#FFF" />}
+                icon={<Ionicons name="help-circle-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />}
               />
             </View>
           </View>
@@ -144,14 +180,14 @@ export default function Profile() {
   );
 }
 
+// Styles remain unchanged
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: '#F8F9FA',
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
   },
   contentContainer: {
     paddingBottom: 30,
@@ -160,12 +196,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: '#F8F9FA',
   },
   loadingText: {
     fontFamily: 'winky',
     fontSize: 16,
-    color: '#333',
+    color: '#555',
     marginTop: 12,
   },
   header: {
@@ -173,14 +209,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
     fontFamily: 'winky-bold',
@@ -188,75 +223,83 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   logoutButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   userInfoCard: {
     backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
-    margin: 16,
+    borderRadius: 12,
+    padding: 24,
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   userTextInfo: {
     alignItems: 'center',
   },
   userName: {
     fontFamily: 'winky-bold',
-    fontSize: 24,
+    fontSize: 22,
     color: '#1F2A44',
-    marginBottom: 8,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   userEmail: {
     fontFamily: 'winky',
-    fontSize: 16,
-    color: '#4B5563',
-    marginBottom: 12,
+    fontSize: 15,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  warningText: {
+    fontFamily: 'winky',
+    fontSize: 14,
+    color: '#DC2626',
+    marginTop: 8,
+    textAlign: 'center',
   },
   adminBadge: {
-    backgroundColor: '#10B981',
+    backgroundColor: Colors.PRIMARY,
     borderRadius: 12,
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 12,
     alignSelf: 'center',
   },
   adminText: {
     color: '#FFF',
     fontFamily: 'winky-bold',
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '600',
   },
   adminSection: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    marginTop: 16,
   },
   sectionTitle: {
     fontFamily: 'winky-bold',
     fontSize: 18,
     color: '#1F2A44',
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   adminActions: {
     gap: 12,
   },
   adminButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    backgroundColor: Colors.PRIMARY,
+    borderRadius: 8,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
 });

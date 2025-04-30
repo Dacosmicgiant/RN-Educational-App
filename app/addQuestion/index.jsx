@@ -86,79 +86,63 @@ export default function AddQuestion({ route, navigation }) {
 
   const handleAddQuestion = async () => {
     // Validate question
-    // Removed difficulty check
     if (!selectedModuleId || !questionText || !explanation) {
       Alert.alert('Validation Error', 'Please fill all required fields');
       return;
     }
-
+  
     // Check if at least one option is marked correct
     if (!options.some(option => option.isCorrect)) {
       Alert.alert('Validation Error', 'Please mark at least one option as correct');
       return;
     }
-
-    // Check if all options have text
-    // Filter out options that are completely empty if you only want 4 options, regardless if user only fills 2 etc.
-    // Or ensure all 4 have text if required
+  
+    // Check if at least two options have text
     const filledOptions = options.filter(option => option.text.trim() !== '');
-    if (filledOptions.length < 2) { // Ensure at least two options are filled
-         Alert.alert('Validation Error', 'Please provide text for at least two options.');
-         return;
+    if (filledOptions.length < 2) {
+      Alert.alert('Validation Error', 'Please provide text for at least two options.');
+      return;
     }
-     // Ensure all 4 options have text if that's the requirement
-    // if (options.some(option => option.text.trim() === '')) {
-    //   Alert.alert('Validation Error', 'All options must have text');
-    //   return;
-    // }
-
-
+  
     setLoading(true);
-
+  
     try {
       const moduleRef = doc(db, 'modules', selectedModuleId);
       const moduleDoc = await getDoc(moduleRef);
-
+  
       if (!moduleDoc.exists()) {
         Alert.alert('Error', 'Selected module not found');
         setLoading(false);
         return;
       }
-
+  
       // Add question to the questions collection
       const questionRef = await addDoc(collection(db, 'questions'), {
         text: questionText,
-        options: options.filter(option => option.text.trim() !== ''), // Only save options with text
-        // Removed difficulty field
-        // difficulty,
+        options: options.filter(option => option.text.trim() !== ''),
         explanation,
         moduleId: selectedModuleId,
         certificationId: selectedCertId,
         createdAt: new Date()
       });
-
-      // Add question ID to the module's questions subcollection (optional, based on your schema)
-      // This step might be redundant if you only query questions by moduleID.
-      // Keeping it as per original code, but note it adds complexity.
+  
+      // Add question ID to the module's questions subcollection
       try {
-         await addDoc(collection(db, 'modules', selectedModuleId, 'questions'), {
-            questionId: questionRef.id
-         });
+        await addDoc(collection(db, 'modules', selectedModuleId, 'questions'), {
+          questionId: questionRef.id
+        });
       } catch (subcollectionError) {
-         console.warn("Failed to add question ID to module subcollection:", subcollectionError);
-         // Decide if this error should prevent the question from being added.
-         // For now, just log a warning. The question is already in the main questions collection.
+        console.warn("Failed to add question ID to module subcollection:", subcollectionError);
       }
-
-
+  
       // Update the question count on the module
       await updateDoc(moduleRef, {
         questionCount: increment(1)
       });
-
+  
       Alert.alert('Success', 'Question added successfully!');
-
-      // Reset form
+  
+      // Reset only question-related fields
       setQuestionText('');
       setOptions([
         { text: '', isCorrect: false },
@@ -166,14 +150,9 @@ export default function AddQuestion({ route, navigation }) {
         { text: '', isCorrect: false },
         { text: '', isCorrect: false }
       ]);
-      // Removed difficulty reset
-      // setDifficulty('medium');
       setExplanation('');
-      setSelectedCertId(''); // Reset selected certification and module
-      setSelectedModuleId('');
-      setModules([]);
-
-
+      // Do NOT reset selectedCertId, selectedModuleId, or modules
+  
     } catch (error) {
       console.error('Error adding question:', error);
       Alert.alert('Error', 'Failed to add question');
