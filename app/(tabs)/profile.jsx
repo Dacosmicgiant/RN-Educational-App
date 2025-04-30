@@ -1,11 +1,12 @@
+import "./../../global.css"
+
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { auth, db } from '../../config/firebaseConfig';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import Colors from '../../constants/Colors';
-import Button from './../../components/Shared/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -94,84 +95,92 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View className="flex-1 justify-center items-center bg-[#F8F9FA]">
         <ActivityIndicator size="large" color={Colors.PRIMARY} />
-        <Text style={styles.loadingText}>Loading profile...</Text>
+        <Text className="font-[winky] text-base text-[#555] mt-3">Loading profile...</Text>
       </View>
     );
   }
 
   if (!auth.currentUser) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Not logged in.</Text>
-          <Button text="Go to Sign In" onPress={() => router.replace('/auth/SignIn')} style={{ marginTop: 20 }} />
+      <SafeAreaView className="flex-1 bg-[#F8F9FA]">
+        <View className="flex-1 justify-center items-center">
+          <Text className="font-[winky] text-base text-[#555]">Not logged in.</Text>
+          <TouchableOpacity 
+            className="bg-[#4F46E5] py-3 px-6 rounded-lg mt-5"
+            onPress={() => router.replace('/auth/SignIn')}
+          >
+            <Text className="text-white font-[winky-bold] text-base">Go to Sign In</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView className="flex-1 bg-[#F8F9FA]">
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        className="flex-1"
+        contentContainerClassName="pb-8"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-[#EEE]">
           <TouchableOpacity
-            style={styles.backButton}
+            className="p-2"
             onPress={() => router.back()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text className="font-[winky-bold] text-xl text-[#333]">Profile</Text>
           <TouchableOpacity
             onPress={handleLogout}
-            style={styles.logoutButton}
+            className="p-2"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="log-out-outline" size={26} color={Colors.PRIMARY} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.userInfoCard}>
-          <View style={styles.userTextInfo}>
-            <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
+        <View className="bg-white rounded-xl p-6 mx-4 mt-5 mb-4 shadow-sm">
+          <View className="items-center">
+            <Text className="font-[winky-bold] text-2xl text-[#1F2A44] mb-1.5 text-center" numberOfLines={1} ellipsizeMode="tail">
               {currentUserData?.name || 'User Name Not Found'}
             </Text>
-            <Text style={styles.userEmail} numberOfLines={1} ellipsizeMode="tail">
+            <Text className="font-[winky] text-sm text-[#6B7280] mb-4 text-center" numberOfLines={1} ellipsizeMode="tail">
               {currentUserData?.email || auth.currentUser?.email || 'Email Not Found'}
             </Text>
             {isAdmin === true && (
-              <View style={styles.adminBadge}>
-                <Text style={styles.adminText}>Admin</Text>
+              <View className="bg-[#4F46E5] rounded-xl py-1.5 px-3 self-center">
+                <Text className="text-white font-[winky-bold] text-xs">Admin</Text>
               </View>
             )}
             {currentUserData === null && !loading && (
-              <Text style={styles.warningText}>Could not load profile details from database.</Text>
+              <Text className="font-[winky] text-sm text-[#DC2626] mt-2 text-center">Could not load profile details from database.</Text>
             )}
           </View>
         </View>
 
         {isAdmin && (
-          <View style={styles.adminSection}>
-            <Text style={styles.sectionTitle}>Admin Actions</Text>
-            <View style={styles.adminActions}>
-              <Button
-                text="Create New Course"
+          <View className="px-4 mt-4">
+            <Text className="font-[winky-bold] text-lg text-[#1F2A44] mb-4 text-left">Admin Actions</Text>
+            <View className="space-y-3">
+              <TouchableOpacity
+                className="bg-[#4F46E5] rounded-lg py-3 flex-row items-center justify-center shadow"
                 onPress={() => router.push('/addCertification')}
-                style={styles.adminButton}
-                icon={<Ionicons name="add-circle-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />}
-              />
-              <Button
-                text="Add Questions to Module"
+              >
+                <Ionicons name="add-circle-outline" size={20} color="#FFF" className="mr-2" />
+                <Text className="text-white font-[winky-bold]">Create New Course</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                className="bg-[#4F46E5] rounded-lg py-3 flex-row items-center justify-center shadow"
                 onPress={() => router.push('/addQuestion')}
-                style={styles.adminButton}
-                icon={<Ionicons name="help-circle-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />}
-              />
+              >
+                <Ionicons name="help-circle-outline" size={20} color="#FFF" className="mr-2" />
+                <Text className="text-white font-[winky-bold]">Add Questions to Module</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -179,127 +188,3 @@ export default function Profile() {
     </SafeAreaView>
   );
 }
-
-// Styles remain unchanged
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingBottom: 30,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-  },
-  loadingText: {
-    fontFamily: 'winky',
-    fontSize: 16,
-    color: '#555',
-    marginTop: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontFamily: 'winky-bold',
-    fontSize: 20,
-    color: '#333',
-  },
-  logoutButton: {
-    padding: 8,
-  },
-  userInfoCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 24,
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  userTextInfo: {
-    alignItems: 'center',
-  },
-  userName: {
-    fontFamily: 'winky-bold',
-    fontSize: 22,
-    color: '#1F2A44',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  userEmail: {
-    fontFamily: 'winky',
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  warningText: {
-    fontFamily: 'winky',
-    fontSize: 14,
-    color: '#DC2626',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  adminBadge: {
-    backgroundColor: Colors.PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    alignSelf: 'center',
-  },
-  adminText: {
-    color: '#FFF',
-    fontFamily: 'winky-bold',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  adminSection: {
-    paddingHorizontal: 16,
-    marginTop: 16,
-  },
-  sectionTitle: {
-    fontFamily: 'winky-bold',
-    fontSize: 18,
-    color: '#1F2A44',
-    marginBottom: 16,
-    textAlign: 'left',
-  },
-  adminActions: {
-    gap: 12,
-  },
-  adminButton: {
-    backgroundColor: Colors.PRIMARY,
-    borderRadius: 8,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-});

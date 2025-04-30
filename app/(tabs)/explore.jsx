@@ -1,14 +1,14 @@
+import "./../../global.css"
+
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  ActivityIndicator, 
-  StyleSheet, 
-  TouchableOpacity,
+import {
+  View,
+  Text,
+  FlatList,
+  ActivityIndicator,
   RefreshControl,
   SafeAreaView,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import { collection, getDocs, query, orderBy, limit, startAfter } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
@@ -27,12 +27,7 @@ export default function Explore() {
   const PAGE_LIMIT = 6;
 
   const fetchCertifications = async (refresh = false) => {
-    if (refresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    
+    refresh ? setRefreshing(true) : setLoading(true);
     try {
       const q = query(
         collection(db, 'certifications'),
@@ -40,15 +35,13 @@ export default function Explore() {
         limit(PAGE_LIMIT)
       );
       const snapshot = await getDocs(q);
-      
+
       if (snapshot.empty) {
         setHasMoreData(false);
       } else {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        const lastVisible = snapshot.docs[snapshot.docs.length - 1];
-        
         setCertifications(data);
-        setLastDoc(lastVisible);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
         setHasMoreData(snapshot.docs.length === PAGE_LIMIT);
       }
     } catch (error) {
@@ -61,7 +54,7 @@ export default function Explore() {
 
   const fetchMore = async () => {
     if (!lastDoc || fetchingMore || !hasMoreData) return;
-    
+
     setFetchingMore(true);
     try {
       const q = query(
@@ -71,15 +64,13 @@ export default function Explore() {
         limit(PAGE_LIMIT)
       );
       const snapshot = await getDocs(q);
-      
+
       if (snapshot.empty) {
         setHasMoreData(false);
       } else {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        const newLastDoc = snapshot.docs[snapshot.docs.length - 1];
-        
         setCertifications(prev => [...prev, ...data]);
-        setLastDoc(newLastDoc);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
         setHasMoreData(snapshot.docs.length === PAGE_LIMIT);
       }
     } catch (error) {
@@ -97,14 +88,12 @@ export default function Explore() {
     fetchCertifications();
   }, []);
 
-  const renderItem = ({ item, index }) => (
-    <CertificationCard cert={item} index={index} />
-  );
+  const renderItem = ({ item, index }) => <CertificationCard cert={item} index={index} />;
 
   const ListFooterComponent = () => {
     if (fetchingMore) {
       return (
-        <View style={styles.footerLoader}>
+        <View className="py-5 items-center">
           <ActivityIndicator size="small" color={Colors.PRIMARY} />
         </View>
       );
@@ -112,8 +101,8 @@ export default function Explore() {
 
     if (!hasMoreData && certifications.length > 0) {
       return (
-        <View style={styles.endOfListContainer}>
-          <Text style={styles.endOfListText}>You've seen all certifications</Text>
+        <View className="py-4 items-center">
+          <Text className="text-sm text-gray-500 font-winky">You've seen all certifications</Text>
         </View>
       );
     }
@@ -123,26 +112,26 @@ export default function Explore() {
 
   const ListEmptyComponent = () => {
     if (loading) return null;
-    
+
     return (
-      <View style={styles.emptyContainer}>
+      <View className="flex-1 items-center justify-center py-16">
         <Ionicons name="document-text-outline" size={64} color={Colors.GRAY} />
-        <Text style={styles.emptyText}>No certifications found</Text>
+        <Text className="mt-4 text-base text-gray-500 font-winky">No certifications found</Text>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor={Colors.WHITE} />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.heading}>Explore</Text>
-          <Text style={styles.subheading}>Discover certifications</Text>
+      <View className="flex-1 p-4 bg-white">
+        <View className="mb-4 px-1">
+          <Text className="text-2xl font-bold text-[#333] font-winky-bold">Explore</Text>
+          <Text className="text-base text-gray-500 mt-1 font-winky">Discover certifications</Text>
         </View>
 
         {loading && !refreshing ? (
-          <View style={styles.loaderContainer}>
+          <View className="flex-1 justify-center items-center">
             <ActivityIndicator size="large" color={Colors.PRIMARY} />
           </View>
         ) : (
@@ -151,7 +140,7 @@ export default function Explore() {
             renderItem={renderItem}
             keyExtractor={item => item.id}
             numColumns={2}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={{ paddingBottom: 20, alignItems: 'center' }}
             showsVerticalScrollIndicator={false}
             onEndReached={fetchMore}
             onEndReachedThreshold={0.3}
@@ -171,65 +160,3 @@ export default function Explore() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.WHITE,
-  },
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: Colors.WHITE,
-  },
-  header: {
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  heading: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: 'winky-bold',
-  },
-  subheading: {
-    fontSize: 16,
-    color: Colors.GRAY,
-    marginTop: 4,
-    fontFamily: 'winky',
-  },
-  list: {
-    paddingBottom: 20,
-    alignItems: 'center',
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  endOfListContainer: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  endOfListText: {
-    color: Colors.GRAY,
-    fontSize: 14,
-    fontFamily: 'winky',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: Colors.GRAY,
-    fontFamily: 'winky',
-  }
-});

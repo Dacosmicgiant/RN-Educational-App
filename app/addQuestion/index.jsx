@@ -1,11 +1,12 @@
-import { View, Text, TextInput, Alert, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import "./../../global.css"
+
+import { View, Text, TextInput, Alert, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import React, { useState, useEffect } from 'react';
-import Colors from '../../constants/Colors';
-import { StyleSheet, Platform } from 'react-native'; // Import Platform
-import Button from '../../components/Shared/Button'; // Assuming this is a custom Button component
 import { collection, addDoc, getDocs, doc, updateDoc, getDoc, increment } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 import { Picker } from '@react-native-picker/picker';
+import Button from '../../components/Shared/Button';
+import Colors from '../../constants/Colors';
 
 export default function AddQuestion({ route, navigation }) {
   const [certifications, setCertifications] = useState([]);
@@ -19,8 +20,6 @@ export default function AddQuestion({ route, navigation }) {
     { text: '', isCorrect: false },
     { text: '', isCorrect: false }
   ]);
-  // Removed difficulty state
-  // const [difficulty, setDifficulty] = useState('medium');
   const [explanation, setExplanation] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingCerts, setLoadingCerts] = useState(true);
@@ -85,19 +84,16 @@ export default function AddQuestion({ route, navigation }) {
   };
 
   const handleAddQuestion = async () => {
-    // Validate question
     if (!selectedModuleId || !questionText || !explanation) {
       Alert.alert('Validation Error', 'Please fill all required fields');
       return;
     }
   
-    // Check if at least one option is marked correct
     if (!options.some(option => option.isCorrect)) {
       Alert.alert('Validation Error', 'Please mark at least one option as correct');
       return;
     }
   
-    // Check if at least two options have text
     const filledOptions = options.filter(option => option.text.trim() !== '');
     if (filledOptions.length < 2) {
       Alert.alert('Validation Error', 'Please provide text for at least two options.');
@@ -116,7 +112,6 @@ export default function AddQuestion({ route, navigation }) {
         return;
       }
   
-      // Add question to the questions collection
       const questionRef = await addDoc(collection(db, 'questions'), {
         text: questionText,
         options: options.filter(option => option.text.trim() !== ''),
@@ -126,7 +121,6 @@ export default function AddQuestion({ route, navigation }) {
         createdAt: new Date()
       });
   
-      // Add question ID to the module's questions subcollection
       try {
         await addDoc(collection(db, 'modules', selectedModuleId, 'questions'), {
           questionId: questionRef.id
@@ -135,14 +129,12 @@ export default function AddQuestion({ route, navigation }) {
         console.warn("Failed to add question ID to module subcollection:", subcollectionError);
       }
   
-      // Update the question count on the module
       await updateDoc(moduleRef, {
         questionCount: increment(1)
       });
   
       Alert.alert('Success', 'Question added successfully!');
   
-      // Reset only question-related fields
       setQuestionText('');
       setOptions([
         { text: '', isCorrect: false },
@@ -151,7 +143,6 @@ export default function AddQuestion({ route, navigation }) {
         { text: '', isCorrect: false }
       ]);
       setExplanation('');
-      // Do NOT reset selectedCertId, selectedModuleId, or modules
   
     } catch (error) {
       console.error('Error adding question:', error);
@@ -162,25 +153,24 @@ export default function AddQuestion({ route, navigation }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollViewContent}>
-      <Text style={styles.heading}>Add New Question</Text>
+    <ScrollView className="p-5 bg-gray-100 flex-grow">
+      <Text className="text-2xl font-bold text-gray-800 mb-5 text-center">Add New Question</Text>
 
       {loadingCerts ? (
-         <View style={styles.loadingContainer}>
+         <View className="flex-1 justify-center items-center p-5">
            <ActivityIndicator size="small" color={Colors.PRIMARY || '#0066FF'} />
-           <Text style={styles.loadingText}>Loading certifications...</Text>
+           <Text className="text-base mt-2 text-gray-600 font-medium">Loading certifications...</Text>
          </View>
       ) : (
         <>
-          <Text style={styles.label}>Select Certification</Text>
-          <View style={styles.pickerContainer}>
+          <Text className="text-base font-semibold text-gray-800 mb-2 mt-4">Select Certification</Text>
+          <View className={`border border-gray-200 bg-white rounded-lg mb-4 overflow-hidden justify-center h-[50px]`}>
             <Picker
               selectedValue={selectedCertId}
               onValueChange={(itemValue) => setSelectedCertId(itemValue)}
-              style={styles.picker}
-              // Use itemStyle for text color on iOS
+              className="h-[50px] w-full"
               itemStyle={Platform.OS === 'ios' ? { color: '#333', fontSize: 16 } : {}}
-              mode="dropdown" // Explicitly set mode
+              mode="dropdown"
             >
               <Picker.Item label="-- Select Certification --" value="" style={{ color: '#999' }} />
               {certifications.map(cert => (
@@ -189,13 +179,13 @@ export default function AddQuestion({ route, navigation }) {
             </Picker>
           </View>
 
-          <Text style={styles.label}>Select Module</Text>
-          <View style={[styles.pickerContainer, modules.length === 0 && styles.pickerDisabled]}>
+          <Text className="text-base font-semibold text-gray-800 mb-2 mt-4">Select Module</Text>
+          <View className={`border border-gray-200 ${modules.length === 0 ? 'bg-gray-100' : 'bg-white'} rounded-lg mb-4 overflow-hidden justify-center h-[50px]`}>
             <Picker
               selectedValue={selectedModuleId}
               onValueChange={(itemValue) => setSelectedModuleId(itemValue)}
-              style={styles.picker}
-              enabled={modules.length > 0} // Disable picker if no modules
+              className="h-[50px] w-full"
+              enabled={modules.length > 0}
               itemStyle={Platform.OS === 'ios' ? { color: '#333', fontSize: 16 } : {}}
               mode="dropdown"
             >
@@ -210,10 +200,10 @@ export default function AddQuestion({ route, navigation }) {
             </Picker>
           </View>
 
-          <Text style={styles.label}>Question Text</Text>
+          <Text className="text-base font-semibold text-gray-800 mb-2 mt-4">Question Text</Text>
           <TextInput
-            placeholder='Enter question text'
-            style={styles.TextInput}
+            placeholder="Enter question text"
+            className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800"
             value={questionText}
             onChangeText={setQuestionText}
             multiline
@@ -221,178 +211,51 @@ export default function AddQuestion({ route, navigation }) {
             placeholderTextColor="#999"
           />
 
-          <Text style={styles.label}>Options (tap circle to mark correct)</Text>
+          <Text className="text-base font-semibold text-gray-800 mb-2 mt-4">Options (tap circle to mark correct)</Text>
           {options.map((option, index) => (
-            <View key={index} style={styles.optionContainer}>
+            <View key={index} className="flex-row items-center mb-2 gap-2">
               <TextInput
                 placeholder={`Option ${index + 1}`}
-                style={[
-                  styles.TextInput,
-                  styles.optionInput,
-                   // Removed correctOption style on TextInput border
-                ]}
+                className="flex-1 border border-gray-200 bg-white p-3 rounded-lg text-base text-gray-800"
                 value={option.text}
                 onChangeText={(text) => handleOptionChange(index, text)}
                 placeholderTextColor="#999"
               />
               <TouchableOpacity
-                style={[styles.correctButton, option.isCorrect && styles.correctButtonSelected]}
+                className={`w-10 h-10 rounded-full justify-center items-center border ${option.isCorrect ? 'bg-blue-600 border-blue-600' : 'bg-gray-200 border-gray-300'}`}
                 onPress={() => toggleCorrectOption(index)}
               >
-                <Text style={[styles.correctButtonText, option.isCorrect && styles.correctButtonTextSelected]}>
-                  {/* Use consistent checkmark or letter, not ? */}
-                   {option.isCorrect ? '✓' : String.fromCharCode(65 + index)}
+                <Text className={`text-base font-semibold ${option.isCorrect ? 'text-white' : 'text-gray-600'}`}>
+                  {option.isCorrect ? '✓' : String.fromCharCode(65 + index)}
                 </Text>
               </TouchableOpacity>
             </View>
           ))}
 
-          {/* Removed Difficulty Picker Section */}
-          {/*
-          <Text style={styles.label}>Difficulty</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={difficulty}
-              onValueChange={(itemValue) => setDifficulty(itemValue)}
-              style={styles.picker}
-              itemStyle={Platform.OS === 'ios' ? { color: '#333', fontSize: 16 } : {}}
-              mode="dropdown"
-            >
-              <Picker.Item label="Easy" value="easy" />
-              <Picker.Item label="Medium" value="medium" />
-              <Picker.Item label="Hard" value="hard" />
-            </Picker>
-          </View>
-          */}
-
-          <Text style={styles.label}>Explanation (shown after answering)</Text>
+          <Text className="text-base font-semibold text-gray-800 mb-2 mt-4">Explanation (shown after answering)</Text>
           <TextInput
-            placeholder='Explanation for the correct answer'
-            style={[styles.TextInput, styles.explanationInput]}
+            placeholder="Explanation for the correct answer"
+            className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800 min-h-[100px]"
             value={explanation}
             onChangeText={setExplanation}
             multiline
             numberOfLines={4}
             placeholderTextColor="#999"
+            textAlignVertical="top"
           />
 
           <Button
-            text={'Add Question'}
+            text="Add Question"
             onPress={handleAddQuestion}
             loading={loading}
-            type='primary' // Assuming your Button component handles 'primary' type
-            style={styles.saveButton}
+            type="primary"
+            style="mt-5"
           />
-           {/* Added bottom padding */}
-           <View style={{ height: 30 }} />
+          
+          {/* Bottom padding */}
+          <View className="h-8" />
         </>
       )}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollViewContent: {
-    padding: 20, // Consistent padding
-    backgroundColor: '#F5F7FA', // Consistent background
-    flexGrow: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    fontSize: 16,
-    marginTop: 10,
-    color: '#555',
-    fontWeight: '500',
-  },
-  heading: {
-    fontSize: 24, // Adjusted size
-    fontWeight: '700', // Use standard weight
-    color: '#333', // Dark text
-    marginBottom: 20,
-    textAlign: 'center', // Center heading
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600', // Use standard weight
-    color: '#333',
-    marginBottom: 8, // More space below label
-    marginTop: 15, // More space above label
-  },
-  TextInput: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0', // Lighter border
-    backgroundColor: '#FFFFFF', // White background
-    padding: 12, // Slightly less padding
-    borderRadius: 8, // More rounded corners
-    fontSize: 16,
-    marginBottom: 15, // Space below input
-    color: '#333', // Text color
-  },
-   explanationInput: {
-      minHeight: 100, // Ensure explanation text area is large enough
-      textAlignVertical: 'top', // Align text to top on Android
-   },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    marginBottom: 15,
-    overflow: 'hidden',
-    justifyContent: 'center', // Center picker content vertically
-     height: 50, // Fixed height for consistency
-  },
-   pickerDisabled: {
-     backgroundColor: '#F0F0F0', // Lighter background for disabled
-   },
-  picker: {
-    height: 50, // Controlled by container height
-    width: '100%',
-    // On Android, picker text color might need adjustment depending on RN version and theme
-    // On iOS, itemStyle is used
-  },
-  optionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 10, // Use gap for spacing between input and button
-  },
-  optionInput: {
-    flex: 1, // Allow input to take available space
-    marginBottom: 0, // Reset bottom margin if using gap
-  },
-  // Removed correctOption style on TextInput border
-
-  correctButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E0E0E0', // Default grey button
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1, // Added border
-    borderColor: '#CCC', // Added border color
-    // Removed marginLeft if using gap
-  },
-  correctButtonSelected: {
-    backgroundColor: Colors.PRIMARY || '#0066FF', // Primary color when selected
-    borderColor: Colors.PRIMARY || '#0066FF',
-  },
-  correctButtonText: {
-    fontSize: 16, // Adjusted size
-    fontWeight: '600', // Added weight
-    color: '#555', // Darker text for unselected
-  },
-  correctButtonTextSelected: {
-    color: '#FFFFFF', // White text when selected
-  },
-  saveButton: {
-    marginTop: 20,
-    // marginBottom handled by ScrollView content padding
-  }
-});

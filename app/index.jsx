@@ -1,128 +1,86 @@
-import { Image, Text, View, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native"; // Added ActivityIndicator
-import Colors from '../constants/Colors';
-// Removed redundant StyleSheet import
+import "./../global.css";
+import { Image, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { onAuthStateChanged } from "firebase/auth"; // Corrected import casing if needed, though usually lowercase is fine for functions
-import { auth, db } from "./../config/firebaseConfig"; // Combined db import
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "./../config/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
-import { useContext, useEffect, useState } from "react"; // Added useEffect, useState
+import { useContext, useEffect, useState } from "react";
 import { UserDetailContext } from "@/context/UserDetailContext";
-// Removed db import again as it's combined above
 
 export default function Index() {
   const router = useRouter();
   const { userDetail, setUserDetail } = useContext(UserDetailContext);
-  const [loading, setLoading] = useState(true); // State to manage loading indicator
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // onAuthStateChanged returns an unsubscribe function
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        console.log("User found:", user.email); // Log specific info if needed
+        console.log("User found:", user.email);
         try {
-          const docRef = doc(db, 'users', user.email); // Ensure user.email is valid as ID
+          const docRef = doc(db, 'users', user.email);
           const docSnap = await getDoc(docRef);
 
           if (docSnap.exists()) {
             console.log("User data found:", docSnap.data());
             setUserDetail(docSnap.data());
           } else {
-            // Handle case where user is authenticated but no user document exists
             console.log("No such user document!");
-            // Maybe navigate to a profile setup screen or handle appropriately
-            // setUserDetail(null); // Or set some default/error state
           }
-          // Navigate only after fetching and setting data (or handling absence)
-          router.replace('/(tabs)/home');
 
+          router.replace('/(tabs)/home');
         } catch (error) {
           console.error("Error fetching user document:", error);
-          // Handle error appropriately - maybe show an error message or stay on login
-          setLoading(false); // Stop loading even if there's an error fetching data
+          setLoading(false);
         }
-        // Note: Navigation might happen before loading is set to false below,
-        // depending on async timing. If user is logged in, they likely won't see the landing page.
       } else {
-        // No user is signed in.
         console.log("No user signed in.");
-        setUserDetail(null); // Clear user detail if logged out
-        setLoading(false); // Stop loading, show the landing page
+        setUserDetail(null);
+        setLoading(false);
       }
     });
 
-    // Cleanup function: Unsubscribe when the component unmounts
     return () => {
       console.log("Unsubscribing auth listener");
       unsubscribe();
     };
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
-  // Show loading indicator while checking auth state
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.PRIMARY} />
+      <View className="flex-1 justify-center items-center">
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }
 
-  // Render landing page only if not loading and user isn't logged in (handled by the effect)
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: Colors.WHITE
-      }}
-    >
-      <Image source={require("./../assets/images/landing.png")}
-        style={{
-          marginTop: 70,
-          width: '100%',
-          height: 300,
-          resizeMode: 'contain' // Added resizeMode for better image handling
-        }}
+    <View className="flex-1 bg-white">
+      <Image
+        source={require("./../assets/images/landing.png")}
+        className="mt-[70px] w-full h-[300px]"
+        resizeMode="contain"
       />
 
-      <View style={{
-        marginTop: 30,
-        padding: 25,
-        backgroundColor: Colors.PRIMARY,
-        // height: '100%', // Avoid fixed height like this, let content dictate or use flex
-        flex: 1, // Use flex: 1 to fill remaining space
-        borderTopLeftRadius: 35,
-        borderTopRightRadius: 35,
-      }}>
-        <Text style={{
-          fontSize: 30,
-          textAlign: "center",
-          color: Colors.WHITE,
-          fontFamily: 'winky-bold',
-        }}> Welcome to Intellect</Text>
+      <View className="flex-1 mt-8 p-6 bg-[#007AFF] rounded-t-[35px]">
+        <Text className="text-white text-center text-[30px] font-bold font-['winky-bold']">
+          Welcome to Intellect
+        </Text>
+        <Text className="text-white text-center text-[20px] mt-5 font-['winky']">
+          Your go to destination for mock tests and exam preparation
+        </Text>
 
-        <Text style={{
-          fontSize: 20,
-          color: Colors.WHITE,
-          marginTop: 20,
-          textAlign: 'center',
-          fontFamily: 'winky'
-        }}> Your go to destination for mock tests and exam preparation </Text> {/* Fixed typo */}
-
-        <TouchableOpacity style={styles.button}
+        <TouchableOpacity
+          className="bg-white mt-5 p-4 rounded-lg shadow"
           onPress={() => router.push('/auth/SignUp')}
         >
-          <Text style={[styles.buttonText, { color: Colors.PRIMARY }]}>
-            Get Started
-          </Text>
+          <Text className="text-[#007AFF] text-center text-lg font-['winky']">Get Started</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button,
-        {
-          backgroundColor: Colors.PRIMARY,
-          borderColor: Colors.WHITE,
-          borderWidth: 1,
-        }]}
+
+        <TouchableOpacity
+          className="mt-5 p-4 rounded-lg border border-white"
           onPress={() => router.push('/auth/SignIn')}
         >
-          <Text style={[styles.buttonText, { color: Colors.WHITE }]}>
+          <Text className="text-white text-center text-lg font-['winky']">
             Already Have an account?
           </Text>
         </TouchableOpacity>
@@ -130,18 +88,3 @@ export default function Index() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  button: {
-    padding: 15, // Reduced padding slightly
-    backgroundColor: Colors.WHITE,
-    marginTop: 20,
-    borderRadius: 10,
-    elevation: 2, // Added subtle elevation for Android
-  },
-  buttonText: {
-    textAlign: 'center',
-    fontSize: 18,
-    fontFamily: 'winky'
-  }
-});

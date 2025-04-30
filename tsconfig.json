@@ -12,6 +12,10 @@
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-, "app/index.jsx", "app/_layout.jsx", "components/Shared/CertificationCard.jsx"  ]
+    "expo-env.d.ts",
+    "app/index.jsx",
+    "app/_layout.jsx",
+    "components/Shared/CertificationCard.jsx",
+    "nativewind-env.d.ts"
+  ]
 }

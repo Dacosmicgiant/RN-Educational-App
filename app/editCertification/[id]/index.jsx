@@ -1,6 +1,6 @@
 // Path: app/editCertification/[id]/index.js
-
-import { View, Text, TextInput, Alert, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
+import "./../../../global.css"
+import { View, Text, TextInput, Alert, ScrollView, ActivityIndicator, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
 import Colors from '../../../constants/Colors';
@@ -72,9 +72,6 @@ export default function EditCertification() {
           const data = doc.data();
           
           // Assign module number based on priority:
-          // 1. Use existing moduleNumber if it's a number
-          // 2. Try to parse moduleNumber if it's a string
-          // 3. Fall back to the index position + 1 if all else fails
           let moduleNumber;
           if (typeof data.moduleNumber === 'number') {
             moduleNumber = data.moduleNumber;
@@ -346,9 +343,9 @@ export default function EditCertification() {
   // --- Loading State UI ---
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView className="flex-1 justify-center items-center bg-gray-50 p-5">
         <ActivityIndicator size="large" color={Colors.PRIMARY || '#0066FF'} />
-        <Text style={styles.loadingText}>Loading Certification Data...</Text>
+        <Text className="mt-4 text-base font-medium text-gray-600">Loading Certification Data...</Text>
       </SafeAreaView>
     );
   }
@@ -356,10 +353,13 @@ export default function EditCertification() {
   // --- Error State UI (Certification not found or failed load) ---
   if (!certification && !loading) {
     return (
-      <SafeAreaView style={styles.errorContainer}>
-        <Text style={styles.errorText}>Could not load certification details.</Text>
-        <TouchableOpacity style={styles.goBackButton} onPress={() => router.back()}>
-          <Text style={styles.goBackButtonText}>Go Back</Text>
+      <SafeAreaView className="flex-1 justify-center items-center bg-gray-50 p-5">
+        <Text className="text-lg font-semibold text-red-500 mb-5 text-center">Could not load certification details.</Text>
+        <TouchableOpacity 
+          className="bg-blue-500 py-3 px-6 rounded-lg"
+          onPress={() => router.back()}
+        >
+          <Text className="text-white text-base font-semibold">Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -367,22 +367,22 @@ export default function EditCertification() {
 
   // --- Edit Certification UI ---
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollViewContent}>
-        <Text style={styles.heading}>Edit Certification</Text>
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <ScrollView className="p-4 bg-gray-50 flex-grow">
+        <Text className="text-2xl font-bold text-gray-800 mb-5 text-center">Edit Certification</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.subHeading}>Certification Details</Text>
+        <View className="bg-white rounded-xl p-5 mb-5 shadow-sm">
+          <Text className="text-xl font-semibold text-gray-800 mt-1 mb-4">Certification Details</Text>
           <TextInput
-            placeholder='Certification Title'
-            style={styles.TextInput}
+            placeholder="Certification Title"
+            className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800"
             value={title}
             onChangeText={setTitle}
             placeholderTextColor="#999"
           />
           <TextInput
-            placeholder='Short Description'
-            style={[styles.TextInput, styles.descriptionInput]}
+            placeholder="Short Description"
+            className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800 min-h-[80px]"
             value={description}
             onChangeText={setDescription}
             multiline
@@ -391,8 +391,8 @@ export default function EditCertification() {
             textAlignVertical="top"
           />
           <TextInput
-            placeholder='Image URL (optional)'
-            style={styles.TextInput}
+            placeholder="Image URL (optional)"
+            className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800"
             value={image}
             onChangeText={setImage}
             placeholderTextColor="#999"
@@ -400,41 +400,41 @@ export default function EditCertification() {
           />
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.subHeading}>Modules ({moduleFields.length})</Text>
+        <View className="bg-white rounded-xl p-5 mb-5 shadow-sm">
+          <Text className="text-xl font-semibold text-gray-800 mt-1 mb-4">Modules ({moduleFields.length})</Text>
           {moduleFields.map((module, index) => (
-            <View key={module.id} style={styles.moduleContainer}>
-              <View style={styles.moduleHeader}>
-                <Text style={styles.moduleHeading}>
+            <View key={module.id} className="border border-gray-300 bg-gray-50 rounded-lg p-4 mb-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-lg font-semibold text-gray-800">
                   Module {typeof module.moduleNumber === 'number' && !isNaN(module.moduleNumber)
                     ? module.moduleNumber
                     : index + 1} Details
                 </Text>
                 {moduleFields.length > 1 && (
-                  <TouchableOpacity onPress={() => removeModuleField(index)} style={styles.removeButton}>
+                  <TouchableOpacity onPress={() => removeModuleField(index)} className="p-1">
                     <MaterialIcons name="remove-circle-outline" size={24} color={Colors.DANGER || 'red'} />
                   </TouchableOpacity>
                 )}
               </View>
 
               <TextInput
-                placeholder='Module Number'
-                style={styles.TextInput}
+                placeholder="Module Number"
+                className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800"
                 value={String(module.moduleNumber || '')}
                 onChangeText={(value) => updateModuleField(index, 'moduleNumber', value)}
                 keyboardType="number-pad"
                 placeholderTextColor="#999"
               />
               <TextInput
-                placeholder='Module Title'
-                style={styles.TextInput}
+                placeholder="Module Title"
+                className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800"
                 value={module.title}
                 onChangeText={(value) => updateModuleField(index, 'title', value)}
                 placeholderTextColor="#999"
               />
               <TextInput
-                placeholder='Module Description'
-                style={[styles.TextInput, styles.moduleDescriptionInput]}
+                placeholder="Module Description"
+                className="border border-gray-200 bg-white p-3 rounded-lg text-base mb-4 text-gray-800 min-h-[80px]"
                 value={module.description}
                 onChangeText={(value) => updateModuleField(index, 'description', value)}
                 multiline
@@ -446,150 +446,24 @@ export default function EditCertification() {
           ))}
 
           <Button
-            text={'Add New Module'}
+            text={"Add New Module"}
             onPress={addModuleField}
-            type='secondary'
-            style={styles.addModuleButton}
+            type="secondary"
+            className="mt-1 mb-5"
           />
         </View>
 
         <Button
-          text={'Save Changes'}
+          text={"Save Changes"}
           onPress={handleUpdateCertification}
           loading={saving}
-          type='primary'
-          style={styles.saveButton}
+          type="primary"
+          className="mt-2"
         />
 
-        <View style={{ height: 30 }} />
+        <View className="h-8" />
 
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#555',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.DANGER || 'red',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  goBackButton: {
-    backgroundColor: Colors.PRIMARY || '#0066FF',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  goBackButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  scrollViewContent: {
-    padding: 16,
-    backgroundColor: '#F5F7FA',
-    flexGrow: 1,
-  },
-  heading: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  subHeading: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 5,
-    marginBottom: 15,
-  },
-  TextInput: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 16,
-    marginBottom: 15,
-    color: '#333',
-  },
-  descriptionInput: {
-    minHeight: 80,
-  },
-  moduleDescriptionInput: {
-    minHeight: 80,
-  },
-  moduleContainer: {
-    borderWidth: 1,
-    borderColor: '#D0D0D0',
-    backgroundColor: '#F8F8F8',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 15,
-  },
-  moduleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  moduleHeading: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  removeButton: {
-    padding: 4,
-  },
-  addModuleButton: {
-    marginTop: 5,
-    marginBottom: 20,
-  },
-  saveButton: {
-    marginTop: 10,
-  }
-});

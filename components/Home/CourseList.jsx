@@ -1,22 +1,17 @@
+import "./../../global.css"
+
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../config/firebaseConfig';
 import { collection, doc, getDoc } from 'firebase/firestore';
 import Colors from '../../constants/Colors';
-import FullWidthCertificationCard from '../Shared/FullWidthCard'; // Ensure this path is correct
+import FullWidthCertificationCard from '../Shared/FullWidthCard';
 
-const ITEMS_PER_PAGE = 5; // How many items to add when scrolling to the end
+const ITEMS_PER_PAGE = 5;
 
-// Define a list of random background colors that complement Colors.PRIMARY
-// (Assuming Colors.PRIMARY is a dominant color like blue/purple. Adjust these as needed)
 const CARD_BACKGROUND_COLORS = [
-  '#E1F5FE', // Light Blue
-  '#E8F5E9', // Light Green
-  '#FFFDE7', // Light Yellow
-  '#FCE4EC', // Light Pink
-  '#F3E5F5', // Light Purple
-  '#EEEEEE', // Light Grey
+  '#E1F5FE', '#E8F5E9', '#FFFDE7', '#FCE4EC', '#F3E5F5', '#EEEEEE'
 ];
 
 const getRandomBackground = () => {
@@ -26,12 +21,12 @@ const getRandomBackground = () => {
 
 export default function CourseList({ currentUser, isAdmin }) {
   const router = useRouter();
-  const [certifications, setCertifications] = useState([]); // Holds ALL fetched certifications
-  const [loading, setLoading] = useState(true); // Initial load state
-  const [visibleItemsCount, setVisibleItemsCount] = useState(ITEMS_PER_PAGE); // How many items to show
+  const [certifications, setCertifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [visibleItemsCount, setVisibleItemsCount] = useState(ITEMS_PER_PAGE);
 
   const fetchCertifications = useCallback(async () => {
-    setLoading(true); // Set loading true for the initial fetch
+    setLoading(true);
     try {
       const enrolledIds = currentUser?.enrolledCertifications || [];
 
@@ -41,7 +36,6 @@ export default function CourseList({ currentUser, isAdmin }) {
         return;
       }
 
-      // Fetch all documents for the enrolled IDs
       const certPromises = enrolledIds.map(id => getDoc(doc(db, 'certifications', id)));
       const certSnapshots = await Promise.all(certPromises);
 
@@ -50,111 +44,72 @@ export default function CourseList({ currentUser, isAdmin }) {
         .map(doc => ({
           id: doc.id,
           ...doc.data(),
-          randomBackgroundColor: getRandomBackground() // Assign a random color here
+          randomBackgroundColor: getRandomBackground()
         }));
 
       setCertifications(certs);
-      // Reset visible items count on new data fetch if needed,
-      // but for initial load, start with ITEMS_PER_PAGE
       setVisibleItemsCount(ITEMS_PER_PAGE);
-
     } catch (err) {
       console.error("Error fetching certifications:", err);
-      // Handle error state appropriately in UI
     } finally {
-      setLoading(false); // Set loading false after fetching
+      setLoading(false);
     }
-  }, [currentUser]); // Depend on currentUser
+  }, [currentUser]);
 
   useEffect(() => {
     fetchCertifications();
-  }, [fetchCertifications]); // Depend on fetchCertifications
+  }, [fetchCertifications]);
 
-  // Slice the data to show only the currently visible items
   const dataToShow = certifications.slice(0, visibleItemsCount);
 
   const handleLoadMore = () => {
-    // If we are already showing all items, do nothing
-    if (visibleItemsCount >= certifications.length) {
-      return;
-    }
-    // Increase the number of visible items
-    setVisibleItemsCount(prevCount => prevCount + ITEMS_PER_PAGE);
+    if (visibleItemsCount >= certifications.length) return;
+    setVisibleItemsCount(prev => prev + ITEMS_PER_PAGE);
   };
 
   const renderItem = ({ item }) => (
-    // Pass the assigned random background color to the card
     <FullWidthCertificationCard cert={item} backgroundColor={item.randomBackgroundColor} />
   );
 
   const renderFooter = () => {
-    // Show activity indicator only if there are more items to load
     if (visibleItemsCount < certifications.length) {
       return (
-        <View style={styles.footerLoading}>
+        <View className="py-5">
           <ActivityIndicator size="small" color={Colors.PRIMARY} />
         </View>
       );
     }
-    return null; // Don't show anything if all items are loaded
+    return null;
   };
 
   if (loading) {
-    return <ActivityIndicator size="large" color={Colors.PRIMARY} style={styles.loading} />;
+    return (
+      <View className="mt-10">
+        <ActivityIndicator size="large" color={Colors.PRIMARY} />
+      </View>
+    );
   }
 
-  // Handle case where there are no certifications after loading
   if (!loading && certifications.length === 0) {
     return (
-      <View style={styles.noCertificatesContainer}>
-        <Text style={styles.noCertificatesText}>No certifications found.</Text>
+      <View className="flex-1 justify-center items-center">
+        <Text className="text-base text-gray-500 font-[winky]">No certifications found.</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1 px-4 dark:bg-neutral-900">
       <FlatList
-        data={dataToShow} // Use the sliced data
+        data={dataToShow}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
-        onEndReached={handleLoadMore} // Trigger loading more items
-        onEndReachedThreshold={0.5} // When the user is 50% from the end of the list
-        ListFooterComponent={renderFooter} // Add footer for loading indicator
+        contentContainerStyle={{ paddingVertical: 10 }}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 15,
-    backgroundColor: Colors.BACKGROUND, // Use a background color from your palette
-  },
-  loading: {
-    marginTop: 40,
-  },
-  listContainer: {
-    paddingVertical: 10, // More padding for better spacing
-  },
-  footerLoading: {
-    paddingVertical: 20,
-  },
-   noCertificatesContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noCertificatesText: {
-    fontSize: 16,
-    color: Colors.DARK_GRAY,
-    fontFamily: 'winky', // Assuming this font exists
-  },
-  // Remove pagination styles as buttons are removed
-  // pagination: {},
-  // pageBtn: {},
-  // pageText: {},
-});

@@ -1,12 +1,13 @@
+import "./../../global.css"
+
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { collection, query, where, getDocs, orderBy, limit, startAfter } from 'firebase/firestore';
 import { db, auth } from './../../config/firebaseConfig';
 import Colors from './../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-
-import { deleteDoc, doc} from 'firebase/firestore';
+import { deleteDoc, doc } from 'firebase/firestore';
 
 export default function HistoryScreen() {
   const [testResults, setTestResults] = useState([]);
@@ -127,50 +128,50 @@ export default function HistoryScreen() {
     return `${mins}m ${secs}s`;
   };
 
+  const getScoreTextColor = (score) => {
+    if (score >= 80) return "text-[#34C759]";
+    if (score >= 60) return "text-[#FF9500]";
+    return "text-[#FF3B30]";
+  };
+
   const renderItem = ({ item }) => (
     <TouchableOpacity 
-      style={styles.resultCard}
+      className="bg-white rounded-xl p-4 mb-3 shadow"
       onPress={() => router.push(`/history/${item.id}`)}
     >
-      <View style={styles.resultHeader}>
-        <Text style={styles.moduleTitle} numberOfLines={1}>{item.moduleTitle}</Text>
-        <Text style={styles.dateText}>{formatDate(item.completedAt)}</Text>
+      <View className="flex-row justify-between mb-3">
+        <Text className="text-base font-semibold text-[#333] flex-1" numberOfLines={1}>{item.moduleTitle}</Text>
+        <Text className="text-xs text-[#666]">{formatDate(item.completedAt)}</Text>
       </View>
       
-      <View style={styles.resultDetails}>
-        <View style={styles.scoreContainer}>
-          <Text style={[styles.scoreText, getScoreStyle(item.score)]}>{item.score}%</Text>
+      <View className="flex-row items-center">
+        <View className="w-[60px] h-[60px] rounded-full bg-[#F0F0F0] justify-center items-center mr-4">
+          <Text className={`text-lg font-bold ${getScoreTextColor(item.score)}`}>{item.score}%</Text>
         </View>
         
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
+        <View className="flex-1">
+          <View className="flex-row items-center mb-1">
             <Ionicons name="checkmark-circle" size={14} color="#34C759" />
-            <Text style={styles.statText}>{item.correctAnswers} correct</Text>
+            <Text className="text-sm text-[#666] ml-1.5">{item.correctAnswers} correct</Text>
           </View>
-          <View style={styles.statItem}>
+          <View className="flex-row items-center mb-1">
             <Ionicons name="close-circle" size={14} color="#FF3B30" />
-            <Text style={styles.statText}>{item.incorrectAnswers} incorrect</Text>
+            <Text className="text-sm text-[#666] ml-1.5">{item.incorrectAnswers} incorrect</Text>
           </View>
-          <View style={styles.statItem}>
+          <View className="flex-row items-center">
             <Ionicons name="time-outline" size={14} color="#666" />
-            <Text style={styles.statText}>{formatDuration(item.timeTaken)}</Text>
+            <Text className="text-sm text-[#666] ml-1.5">{formatDuration(item.timeTaken)}</Text>
           </View>
         </View>
       </View>
     </TouchableOpacity>
   );
 
-  const getScoreStyle = (score) => {
-    if (score >= 80) return styles.highScore;
-    if (score >= 60) return styles.mediumScore;
-    return styles.lowScore;
-  };
-
   const renderFooter = () => {
     if (!loadingMore) return null;
     
     return (
-      <View style={styles.footerLoader}>
+      <View className="py-5 items-center">
         <ActivityIndicator size="small" color={Colors.PRIMARY} />
       </View>
     );
@@ -178,19 +179,19 @@ export default function HistoryScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View className="flex-1 justify-center items-center bg-[#F5F7FA]">
         <ActivityIndicator size="large" color={Colors.PRIMARY} />
-        <Text style={styles.loadingText}>Loading history...</Text>
+        <Text className="text-base mt-4 text-[#333]">Loading history...</Text>
       </View>
     );
   }
 
   if (!auth.currentUser) {
     return (
-      <View style={styles.emptyContainer}>
+      <View className="flex-1 justify-center items-center p-8 bg-[#F5F7FA]">
         <Ionicons name="person-circle-outline" size={64} color="#CCC" />
-        <Text style={styles.emptyTitle}>Sign In Required</Text>
-        <Text style={styles.emptyText}>
+        <Text className="text-lg font-semibold text-[#333] mt-4 mb-2">Sign In Required</Text>
+        <Text className="text-sm text-[#666] text-center leading-5">
           Please sign in to view your test history.
         </Text>
       </View>
@@ -199,10 +200,10 @@ export default function HistoryScreen() {
 
   if (testResults.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
+      <View className="flex-1 justify-center items-center p-8 bg-[#F5F7FA]">
         <Ionicons name="document-text-outline" size={64} color="#CCC" />
-        <Text style={styles.emptyTitle}>No History Found</Text>
-        <Text style={styles.emptyText}>
+        <Text className="text-lg font-semibold text-[#333] mt-4 mb-2">No History Found</Text>
+        <Text className="text-sm text-[#666] text-center leading-5">
           You haven't completed any tests yet. Take a test to see your history here.
         </Text>
       </View>
@@ -210,17 +211,21 @@ export default function HistoryScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.screenTitle}>Test History</Text>
-      <TouchableOpacity style={styles.clearButton} onPress={clearAllHistory}>
-      <Text style={styles.clearButtonText}>Clear All History</Text>
+    <View className="flex-1 bg-[#F5F7FA] p-4">
+      <Text className="text-2xl font-bold mb-4 mt-2 text-[#333]">Test History</Text>
+      
+      <TouchableOpacity 
+        className="bg-[#FF3B30] py-3 px-5 rounded-lg self-center mb-4" 
+        onPress={clearAllHistory}
+      >
+        <Text className="text-white font-semibold text-base">Clear All History</Text>
       </TouchableOpacity>
 
       <FlatList
         data={testResults}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerClassName="pb-6"
         showsVerticalScrollIndicator={false}
         onEndReached={loadMoreResults}
         onEndReachedThreshold={0.5}
@@ -229,135 +234,3 @@ export default function HistoryScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-    padding: 16,
-  },
-  screenTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 16,
-    marginTop: 8,
-    color: '#333',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-  },
-  loadingText: {
-    fontSize: 16,
-    marginTop: 16,
-    color: '#333',
-  },
-  listContainer: {
-    paddingBottom: 24,
-  },
-  resultCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  resultHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  moduleTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  dateText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  resultDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  scoreContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  scoreText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  highScore: {
-    color: '#34C759',
-  },
-  mediumScore: {
-    color: '#FF9500',
-  },
-  lowScore: {
-    color: '#FF3B30',
-  },
-  statsContainer: {
-    flex: 1,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  statText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 6,
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-    backgroundColor: '#F5F7FA',
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  clearButton: {
-    backgroundColor: '#FF3B30',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  clearButtonText: {
-    color: '#FFF',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  
-});
