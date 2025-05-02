@@ -7,8 +7,10 @@ import { db } from '../../config/firebaseConfig';
 import { Picker } from '@react-native-picker/picker';
 import Button from '../../components/Shared/Button';
 import Colors from '../../constants/Colors';
+import { useRouter } from 'expo-router';
 
-export default function AddQuestion({ route, navigation }) {
+export default function AddQuestion() {
+  const router = useRouter();
   const [certifications, setCertifications] = useState([]);
   const [modules, setModules] = useState([]);
   const [selectedCertId, setSelectedCertId] = useState('');
@@ -151,10 +153,28 @@ export default function AddQuestion({ route, navigation }) {
       setLoading(false);
     }
   };
+  
+  const navigateToBatchUpload = () => {
+    router.push('/batchQuestionUpload');
+  };
 
   return (
     <ScrollView className="p-5 bg-gray-100 flex-grow">
       <Text className="text-2xl font-bold text-gray-800 mb-5 text-center">Add New Question</Text>
+      
+      {/* Batch Upload Banner/Button */}
+      <TouchableOpacity 
+        onPress={navigateToBatchUpload}
+        className="bg-indigo-100 p-4 rounded-lg mb-5 flex-row items-center justify-between border border-indigo-200"
+      >
+        <View className="flex-1">
+          <Text className="text-indigo-800 font-bold text-base">Batch Upload Questions</Text>
+          <Text className="text-indigo-600 text-sm mt-1">Upload multiple questions at once from CSV/Excel</Text>
+        </View>
+        <View className="bg-indigo-600 p-2 rounded-lg">
+          <Text className="text-white font-bold">GO</Text>
+        </View>
+      </TouchableOpacity>
 
       {loadingCerts ? (
          <View className="flex-1 justify-center items-center p-5">

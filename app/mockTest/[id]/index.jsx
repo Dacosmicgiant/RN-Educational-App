@@ -137,6 +137,12 @@ export default function TestScreen() {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   };
 
+  // Navigate to a specific question (for review modal)
+  const goToQuestion = (index) => {
+    setCurrentIndex(index);
+    setShowCompleteModal(false);
+  };
+
   const completeTest = async () => {
     if (timerInterval.current) clearInterval(timerInterval.current);
 
@@ -227,7 +233,7 @@ export default function TestScreen() {
     if (savedReportId) {
       Alert.alert(
         'One-Time Viewing',
-        'This test report can only be viewed once. Once you leave this screen, you won’t be able to access these detailed results again.',
+        'This test report can only be viewed once. Once you leave this screen, you wont be able to access these detailed results again.',
         [
           { text: 'Stay', style: 'cancel' },
           { text: 'Leave Anyway', onPress: () => router.back() },
@@ -236,6 +242,11 @@ export default function TestScreen() {
     } else {
       router.back();
     }
+  };
+
+  // Get questions marked for review
+  const getMarkedQuestions = () => {
+    return questions.filter((question, index) => markedForReview[question.id]);
   };
 
   if (loading) {
@@ -392,6 +403,7 @@ export default function TestScreen() {
 
   const currentQuestion = questions[currentIndex];
   const isMarkedForReview = currentQuestion ? markedForReview[currentQuestion.id] || false : false;
+  const markedQuestions = getMarkedQuestions();
 
   if (!currentQuestion) {
     return (
@@ -544,6 +556,54 @@ export default function TestScreen() {
             <Text className="text-base text-textGray mb-2.5 text-center leading-6">
               Are you sure you want to submit your answers and complete the test now?
             </Text>
+            
+            {/* Marked Questions Section */}
+            {markedQuestions.length > 0 && (
+              <View className="mb-4 bg-orange-50 p-3 rounded-lg border border-secondary">
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="bookmark" size={16} color="#FF9500" />
+                  <Text className="text-secondary font-semibold ml-1">
+                    You have {markedQuestions.length} question{markedQuestions.length !== 1 ? 's' : ''} marked for review
+                  </Text>
+                </View>
+                
+                <ScrollView 
+                  className="max-h-40" 
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={{ paddingBottom: 4 }}
+                >
+                  {markedQuestions.map((question, idx) => {
+                    // Find the question index in the full questions array
+                    const questionIndex = questions.findIndex(q => q.id === question.id);
+                    const hasAnswer = selectedAnswers[question.id] !== undefined;
+                    
+                    return (
+                      <TouchableOpacity 
+                        key={question.id}
+                        className="flex-row items-center py-2 border-b border-orange-200 last:border-b-0"
+                        onPress={() => goToQuestion(questionIndex)}
+                      >
+                        <View className="w-6 h-6 rounded-full bg-orange-200 items-center justify-center mr-2">
+                          <Text className="text-xs font-semibold text-secondary">{questionIndex + 1}</Text>
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-sm text-textDark" numberOfLines={1}>
+                            {question.text.length > 40 ? question.text.substring(0, 40) + '...' : question.text}
+                          </Text>
+                        </View>
+                        <View className="ml-2 px-2 py-1 rounded-full bg-gray-200">
+                          <Text className="text-xs font-medium text-textGray">
+                            {hasAnswer ? 'Answered' : 'Unanswered'}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color="#666" style={{ marginLeft: 6 }} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+            
             <Text className="text-sm text-red-400 font-medium mb-6 text-center leading-5 px-2.5">
               Note: Your detailed results will only be available for viewing once, immediately after test completion.
             </Text>
